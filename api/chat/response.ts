@@ -1,5 +1,7 @@
+// @ts-ignore: Vercel provides types at runtime, and @types/vercel__node is not available
+// <reference types="node" />
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { VercelRequest, VercelResponse } from '@vercel/node';
+// import { VercelRequest, VercelResponse } from '@vercel/node';
 
 const API_KEY = process.env.GEMINI_API_KEY;
 if (!API_KEY) {
@@ -29,14 +31,17 @@ const generationConfig = {
 // In-memory chat sessions (replace with persistent storage for production)
 const chatSessions = new Map<string, any>();
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
+  console.log('API: Received request', req.method, req.url);
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
+    console.log('API: Request body', req.body);
     const { message, chatId } = req.body;
     if (!message || !chatId) {
+      console.log('API: Missing message or chatId');
       return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
     }
 
@@ -48,10 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let responseText;
     try {
+      console.log('API: Sending message to Gemini', message);
       const result = await chatSession.sendMessage(message);
+      console.log('API: Gemini raw result', result);
       responseText = await result.response.text();
+      console.log('API: Gemini response text', responseText);
     } catch (aiError: any) {
-      console.error('AI Error:', aiError);
+      console.error('API: AI Error:', aiError);
       if (aiError.message && aiError.message.includes('User location is not supported')) {
         responseText =
           "I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?";
@@ -61,9 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    console.log('API: Responding with', { response: responseText, chatId });
     return res.status(200).json({ response: responseText, chatId });
   } catch (error) {
-    console.error('API Error:', error);
+    console.error('API: API Error:', error);
     return res.status(500).json({ error: 'An unexpected error occurred while processing your request.' });
   }
 } 
