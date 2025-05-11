@@ -35,4 +35,8 @@ Visit http://localhost:3001/api/health to verify the API is running.
 - `package.json`: Dependencies and scripts
 
 ## Contact
-For questions or issues, see the main Owlby documentation or contact the team. 
+For questions or issues, see the main Owlby documentation or contact the team.
+
+## API Endpoints
+
+- Place serverless function endpoints in the `api/` directory at the root of this repo. For example, `api/chat/response.ts` for the chat endpoint. 
