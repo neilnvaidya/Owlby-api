@@ -1,0 +1,24 @@
+{
+  "name": "owlby-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/neilnvaidya/Owlby-api.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/neilnvaidya/Owlby-api/issues"
+  },
+  "homepage": "https://github.com/neilnvaidya/Owlby-api#readme",
+  "description": "",
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
