@@ -1,3 +1,4 @@
+require('dotenv').config();
 // @ts-ignore: Vercel provides types at runtime, and @types/vercel__node is not available
 // <reference types="node" />
 import { GoogleGenerativeAI } from '@google/generative-ai';

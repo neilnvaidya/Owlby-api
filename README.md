@@ -70,6 +70,17 @@ If you want to use Express, you must manually mount endpoints. This is not used 
   curl https://api.owlby.com/api/health
   ```
 
+## Automated Testing (Jest + Supertest)
+
+- Minimal test setup is present using `jest`, `ts-jest`, and `supertest`.
+- To run all tests:
+  ```sh
+  npm test
+  ```
+- Tests require a valid `GEMINI_API_KEY` in your `.env` file for Gemini API access.
+- If your region is not supported by Gemini, tests will pass and return a fallback message indicating region lock.
+- Example: See `api/chat/response.test.ts` for endpoint tests.
+
 ## Updating & Redeploying
 - Make code changes, commit, and push to GitHub.
 - Vercel will auto-deploy.
