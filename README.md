@@ -106,4 +106,19 @@ For questions or issues, see the main Owlby documentation or contact the team.
 
 ## API Endpoints
 
-- Place serverless function endpoints in the `api/` directory at the root of this repo. For example, `api/chat/response.ts` for the chat endpoint. 
+- Place serverless function endpoints in the `api/` directory at the root of this repo. For example, `api/chat/response.ts` for the chat endpoint.
+
+## Privacy & Data Retention
+- Chat data is not stored persistently. Only summaries/insights are extracted and retained for tailoring the AI prompt. Raw chat is discarded at session end.
+
+## Supabase Integration
+- Supabase is not required for MVP. It will be integrated post-MVP for storing learning insights, learning paths, and advanced user data.
+
+## Profile Endpoints
+- User profile endpoints and advanced features are planned for post-MVP.
+
+## TypeScript Typing
+- Improving TypeScript types for API handlers is a post-MVP task unless the API is expanded sooner.
+
+## Known Issues & Limitations
+- Automated UI/component tests are not required for the API. 
