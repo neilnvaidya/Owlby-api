@@ -34,7 +34,7 @@ const chatSessions = new Map<string, any>();
 
 export default async function handler(req: any, res: any) {
   // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', 'https://owlby.com'); // Or specify your frontend domain for more security
+  res.setHeader('Access-Control-Allow-Origin', 'https://www.owlby.com'); // Or specify your frontend domain for more security
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
