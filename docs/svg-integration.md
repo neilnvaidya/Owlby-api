@@ -43,9 +43,9 @@ This document outlines the plan for implementing SVG diagram generation in the O
 - ✅ Optimize SVG size and complexity for mobile rendering
 
 ### SVG Storage Strategy
-- 🔄 Initially store SVGs with unique identifiers in file storage (planned for future improvement)
-- 🔄 Track usage frequency to identify common diagram needs (planned for future improvement)
-- 🔄 Enable retrieval of previously generated SVGs for similar queries (planned for future improvement)
+- 🔄 [DEFERRED] SVG storage functionality deferred as generation is inexpensive at current scale
+- 🔄 For MVP, SVGs will be generated on-demand with each request
+- ⏳ Future enhancement: Implement storage when needed for optimization or library building
 
 ## Implementation Tasks
 

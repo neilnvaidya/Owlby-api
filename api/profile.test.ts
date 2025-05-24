@@ -1,82 +1,188 @@
 // @jest-environment node
+import { test, expect, vi, describe, beforeEach } from 'vitest';
+import { mockRequest, mockResponse } from '../test/mocks';
 import handler from './profile';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import * as jwt from 'jsonwebtoken';
+import { verifyToken } from '../lib/auth';
+import { supabase } from '../lib/supabase';
 
-jest.mock('jsonwebtoken');
+// Mock auth and supabase
+vi.mock('../lib/auth', () => ({
+  verifyToken: vi.fn(),
+}));
 
-const mockProfile = {
-  sub: 'auth0|123',
-  name: 'Test User',
-  email: 'test@example.com',
-  picture: 'https://example.com/avatar.png',
-};
+// Update supabase mock to match the actual implementation
+vi.mock('../lib/supabase', () => ({
+  supabase: {
+    from: vi.fn().mockReturnThis(),
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    insert: vi.fn().mockReturnThis(),
+    update: vi.fn().mockReturnThis(),
+    single: vi.fn(), // Keep this as it's needed in test cases
+  },
+}));
 
-describe('GET /api/profile', () => {
+describe('Profile API', () => {
+  let req: any;
+  let res: any;
+  
   beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns profile for valid token', async () => {
-    (jwt.verify as jest.Mock).mockImplementation((token, getKey, options, cb) => {
-      cb(null, mockProfile);
-    });
-    const req = { method: 'GET', headers: { authorization: 'Bearer validtoken' } } as VercelRequest;
-    let statusCode = 0;
-    let jsonData: any = null;
-    const res = {
-      status(code: number) { statusCode = code; return this; },
-      json(data: any) { jsonData = data; return this; },
-    } as unknown as VercelResponse;
-    await handler(req, res);
-    expect(statusCode).toBe(200);
-    expect(jsonData).toEqual({
-      user_id: 'auth0|123',
+    req = mockRequest();
+    res = mockResponse();
+    vi.resetAllMocks();
+    
+    // Default mock for token verification
+    (verifyToken as any).mockResolvedValue({
+      sub: 'auth0|123456',
       name: 'Test User',
       email: 'test@example.com',
-      picture: 'https://example.com/avatar.png',
+      picture: 'https://example.com/pic.jpg',
     });
   });
-
-  it('returns 401 for missing token', async () => {
-    const req = { method: 'GET', headers: {} } as VercelRequest;
-    let statusCode = 0;
-    let jsonData: any = null;
-    const res = {
-      status(code: number) { statusCode = code; return this; },
-      json(data: any) { jsonData = data; return this; },
-    } as unknown as VercelResponse;
+  
+  test('GET: should return 401 if no token is provided', async () => {
+    req.headers.authorization = '';
+    req.method = 'GET';
+    
     await handler(req, res);
-    expect(statusCode).toBe(401);
-    expect(jsonData).toHaveProperty('error');
+    
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Missing or invalid token' });
   });
-
-  it('returns 401 for invalid token', async () => {
-    (jwt.verify as jest.Mock).mockImplementation((token, getKey, options, cb) => {
-      cb(new Error('Invalid token'), null);
+  
+  test('GET: should return user profile if token is valid', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    req.method = 'GET';
+    
+    // Mock Supabase response - user exists
+    const mockUser = {
+      auth0_id: 'auth0|123456',
+      name: 'Database User',
+      email: 'test@example.com',
+      avatar_url: 'https://example.com/db-pic.jpg',
+      grade_level: 3,
+      interests: ['space', 'math'],
+      parent_email: 'parent@example.com',
+    };
+    
+    // Update to properly mock the Supabase client chain
+    (supabase.from as any).mockReturnThis();
+    (supabase.select as any).mockReturnThis();
+    (supabase.eq as any).mockReturnThis();
+    (supabase.single as any).mockResolvedValue({
+      data: mockUser,
+      error: null,
     });
-    const req = { method: 'GET', headers: { authorization: 'Bearer invalidtoken' } } as VercelRequest;
-    let statusCode = 0;
-    let jsonData: any = null;
-    const res = {
-      status(code: number) { statusCode = code; return this; },
-      json(data: any) { jsonData = data; return this; },
-    } as unknown as VercelResponse;
+    
     await handler(req, res);
-    expect(statusCode).toBe(401);
-    expect(jsonData).toHaveProperty('error');
+    
+    expect(verifyToken).toHaveBeenCalledWith('valid-token');
+    expect(supabase.from).toHaveBeenCalledWith('users');
+    expect(supabase.select).toHaveBeenCalledWith('*');
+    expect(supabase.eq).toHaveBeenCalledWith('auth0_id', 'auth0|123456');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      user_id: 'auth0|123456',
+      name: 'Database User',
+      email: 'test@example.com',
+      picture: 'https://example.com/db-pic.jpg',
+      grade_level: 3,
+      interests: ['space', 'math'],
+      parent_email: 'parent@example.com',
+    });
   });
-
-  it('returns 405 for non-GET methods', async () => {
-    const req = { method: 'POST', headers: {} } as VercelRequest;
-    let statusCode = 0;
-    let jsonData: any = null;
-    const res = {
-      status(code: number) { statusCode = code; return this; },
-      json(data: any) { jsonData = data; return this; },
-    } as unknown as VercelResponse;
+  
+  test('GET: should create user if not found', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    req.method = 'GET';
+    
+    // Mock Supabase response chains for better TypeScript compatibility
+    // First call - user not found
+    (supabase.from as any).mockReturnThis();
+    (supabase.select as any).mockReturnThis();
+    (supabase.eq as any).mockReturnThis();
+    (supabase.single as any).mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST116' },
+    });
+    
+    // Second call - insert succeeds
+    (supabase.from as any).mockReturnThis();
+    (supabase.insert as any).mockReturnThis();
+    (supabase.select as any).mockReturnThis();
+    (supabase.single as any).mockResolvedValueOnce({
+      data: {
+        auth0_id: 'auth0|123456',
+        name: 'Test User',
+        email: 'test@example.com',
+        avatar_url: 'https://example.com/pic.jpg',
+      },
+      error: null,
+    });
+    
     await handler(req, res);
-    expect(statusCode).toBe(405);
-    expect(jsonData).toHaveProperty('error');
+    
+    expect(supabase.from).toHaveBeenCalledWith('users');
+    expect(supabase.insert).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+  
+  test('POST: should update user profile', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    req.method = 'POST';
+    req.body = {
+      name: 'Updated Name',
+      grade_level: 4,
+      interests: ['coding', 'music'],
+      parent_email: 'new-parent@example.com',
+    };
+    
+    // Mock Supabase response chain for the check if user exists
+    (supabase.from as any).mockReturnThis();
+    (supabase.select as any).mockReturnThis();
+    (supabase.eq as any).mockReturnThis();
+    (supabase.single as any).mockResolvedValueOnce({
+      data: { auth0_id: 'auth0|123456', name: 'Old Name' },
+      error: null,
+    });
+    
+    // Mock Supabase response chain for the update operation
+    (supabase.from as any).mockReturnThis();
+    (supabase.update as any).mockReturnThis();
+    (supabase.eq as any).mockReturnThis();
+    (supabase.select as any).mockReturnThis();
+    (supabase.single as any).mockResolvedValueOnce({
+      data: {
+        auth0_id: 'auth0|123456',
+        name: 'Updated Name',
+        email: 'test@example.com',
+        avatar_url: 'https://example.com/pic.jpg',
+        grade_level: 4,
+        interests: ['coding', 'music'],
+        parent_email: 'new-parent@example.com',
+      },
+      error: null,
+    });
+    
+    await handler(req, res);
+    
+    expect(supabase.from).toHaveBeenCalledWith('users');
+    expect(supabase.update).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Updated Name',
+      grade_level: 4,
+      interests: ['coding', 'music'],
+    }));
+  });
+  
+  test('Should return 405 for unsupported methods', async () => {
+    req.headers.authorization = 'Bearer valid-token';
+    req.method = 'DELETE';
+    
+    await handler(req, res);
+    
+    expect(res.status).toHaveBeenCalledWith(405);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Method not allowed' });
   });
 }); 
