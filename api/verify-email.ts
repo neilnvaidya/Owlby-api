@@ -1,17 +1,10 @@
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3001;
+import { NextApiRequest, NextApiResponse } from 'next';
 
-// Middleware
-app.use(express.json());
+export default function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok' });
-});
-
-// Email verification callback endpoint
-app.get('/verify-email', (req, res) => {
   try {
     const { 
       user_id, 
@@ -49,7 +42,9 @@ app.get('/verify-email', (req, res) => {
       const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
       redirectUrl.searchParams.set('success', 'true');
       redirectUrl.searchParams.set('message', 'Email verified successfully!');
-      if (email) redirectUrl.searchParams.set('email', email);
+      if (email && typeof email === 'string') {
+        redirectUrl.searchParams.set('email', email);
+      }
       
       return res.redirect(302, redirectUrl.toString());
       
@@ -60,9 +55,11 @@ app.get('/verify-email', (req, res) => {
       const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
       redirectUrl.searchParams.set('success', 'false');
       redirectUrl.searchParams.set('message', 
-        message || 'Email verification failed'
+        (typeof message === 'string' ? message : null) || 'Email verification failed'
       );
-      if (email) redirectUrl.searchParams.set('email', email);
+      if (email && typeof email === 'string') {
+        redirectUrl.searchParams.set('email', email);
+      }
       
       return res.redirect(302, redirectUrl.toString());
     }
@@ -77,8 +74,4 @@ app.get('/verify-email', (req, res) => {
     
     return res.redirect(302, redirectUrl.toString());
   }
-});
-
-app.listen(PORT, () => {
-  console.log(`API running on port ${PORT}`);
-}); 
+} 

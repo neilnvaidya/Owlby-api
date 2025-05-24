@@ -1,23 +1,12 @@
 {
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "index.js",
-      "use": "@vercel/node"
-    }
-  ],
-  "routes": [
-    {
-      "src": "/verify-email",
-      "dest": "/index.js"
+      "source": "/verify-email",
+      "destination": "/api/verify-email"
     },
     {
-      "src": "/api/(.*)",
-      "dest": "/index.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.js"
+      "source": "/update-profile",
+      "destination": "/api/update-profile"
     }
   ]
 } 
