@@ -112,8 +112,17 @@ const chatSessions = new Map<string, any>();
  */
 function processOwlbyResponse(responseText: string) {
   try {
-    // Try to parse as JSON first
-    const jsonResponse = JSON.parse(responseText);
+    // Extract JSON from code blocks if present
+    let jsonString = responseText.trim();
+    
+    // Check if response is wrapped in ```json blocks
+    const jsonBlockMatch = jsonString.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+      jsonString = jsonBlockMatch[1].trim();
+    }
+    
+    // Try to parse as JSON
+    const jsonResponse = JSON.parse(jsonString);
     
     // Validate the expected structure
     if (jsonResponse.response_text && jsonResponse.interactive_elements) {
