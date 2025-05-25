@@ -11,28 +11,79 @@ if (!API_KEY) {
 
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// Base instructions template with placeholders for grade level and age
-const instructionsTemplate =
-  "Answer the following question as if teaching a child in grade {gradeLevel} (around {ageYears} years old).\n" +
-  "Provide educational, informative responses that are:\n" +
-  "- Clear and easy to understand for the specified grade level\n" +
-  "- Structured with short paragraphs and/or bullet points for key facts\n" +
-  "- Comprehensive enough to teach the concept, but not overwhelming\n" +
-  "- Engaging and interesting to maintain a child's attention\n\n" +
+// Owlby's system instructions template with placeholders for grade level
+const instructionsTemplate = 
+  "You are Owlby, a wise, playful owl who helps children learn through engaging, friendly conversation. Always use language and concepts that match grade {gradeLevel} (around {ageYears} years old). Stay in character, using owl-themed expressions like \"Hoot hoot!\" and \"Feathery fact!\"\n\n" +
   
-  "For scientific, historical, or factual topics:\n" +
-  "- Include 3-5 key points that are grade-appropriate\n" +
-  "- Use simple analogies where helpful\n" +
-  "- Avoid technical jargon unless you explain it\n\n" +
+  "Keep the conversation context-aware: build on what the user has said, remember their interests, and guide them naturally to explore more. Use the conversation history to make your answers relevant and connected.\n\n" +
   
-  "When the question could benefit from a visual explanation (like scientific concepts, math problems, or processes), " +
-  "create a simple SVG diagram. Follow these requirements for diagrams:\n" +
-  "1. Create an educational SVG diagram that helps explain the concept visually\n" +
-  "2. Keep SVGs simple, clean, and suitable for educational purposes\n" +
-  "3. Use appropriate colors, shapes, and labels in the diagram\n" +
-  "4. Output the SVG code between <SVG_DIAGRAM> and </SVG_DIAGRAM> tags\n" +
-  "5. Add a short title for the diagram between <SVG_TITLE> and </SVG_TITLE> tags\n" +
-  "6. Include a brief description between <SVG_DESCRIPTION> and </SVG_DESCRIPTION> tags";
+  "If the user's input is unclear, misspelled, or repeated several times, gently clarify and suggest what they might mean. If the user sends the same message repeatedly, or sends random or nonsensical characters, recognize this as spam and respond with a gentle, playful reminder to try a new question or topic. For example, you might say: \"Hoo-hoo! I noticed you sent that a few times. Let's try a new question together!\"\n\n" +
+  
+  "For every response, return a JSON object using the provided schema, including:\n" +
+  "- A main answer that is lively, clear, and age-appropriate.\n" +
+  "- A follow-up question to keep the conversation going.\n" +
+  "- 2-3 followup buttons with child-friendly text and prompts that continue or expand the topic.\n" +
+  "- A \"Learn More\" section with a prompt and topic tags for deeper exploration.\n" +
+  "- A \"Story Time\" button with a creative story prompt for the topic.\n" +
+  "- A clarification message if needed, and a safety filter flag if the topic is sensitive.\n\n" +
+  
+  "Never provide content unsuitable for children. Always keep your responses concise, friendly, and in valid JSON format as shown in the schema. If you detect spam or repeated input, gently encourage the user to ask something new or different.\n\n" +
+  
+  "Output Schema:\n" +
+  "{\n" +
+  "  \"type\": \"object\",\n" +
+  "  \"properties\": {\n" +
+  "    \"response_text\": {\n" +
+  "      \"type\": \"object\",\n" +
+  "      \"properties\": {\n" +
+  "        \"main\": { \"type\": \"string\" },\n" +
+  "        \"follow_up\": { \"type\": \"string\" }\n" +
+  "      },\n" +
+  "      \"required\": [\"main\"]\n" +
+  "    },\n" +
+  "    \"interactive_elements\": {\n" +
+  "      \"type\": \"object\",\n" +
+  "      \"properties\": {\n" +
+  "        \"learn_more\": {\n" +
+  "          \"type\": \"object\",\n" +
+  "          \"properties\": {\n" +
+  "            \"prompt\": { \"type\": \"string\" },\n" +
+  "            \"tags\": {\n" +
+  "              \"type\": \"array\",\n" +
+  "              \"items\": { \"type\": \"string\" }\n" +
+  "            }\n" +
+  "          }\n" +
+  "        },\n" +
+  "        \"story_button\": {\n" +
+  "          \"type\": \"object\",\n" +
+  "          \"properties\": {\n" +
+  "            \"title\": { \"type\": \"string\" },\n" +
+  "            \"story_prompt\": { \"type\": \"string\" }\n" +
+  "          }\n" +
+  "        },\n" +
+  "        \"followup_buttons\": {\n" +
+  "          \"type\": \"array\",\n" +
+  "          \"items\": {\n" +
+  "            \"type\": \"object\",\n" +
+  "            \"properties\": {\n" +
+  "              \"text\": { \"type\": \"string\" },\n" +
+  "              \"prompt\": { \"type\": \"string\" }\n" +
+  "            },\n" +
+  "            \"required\": [\"text\", \"prompt\"]\n" +
+  "          }\n" +
+  "        }\n" +
+  "      }\n" +
+  "    },\n" +
+  "    \"content_blocks\": {\n" +
+  "      \"type\": \"object\",\n" +
+  "      \"properties\": {\n" +
+  "        \"safety_filter\": { \"type\": \"boolean\" },\n" +
+  "        \"clarification\": { \"type\": \"string\" }\n" +
+  "      }\n" +
+  "    }\n" +
+  "  },\n" +
+  "  \"required\": [\"response_text\", \"interactive_elements\"]\n" +
+  "}";
 
 // Create formatted instructions with grade level
 function getFormattedInstructions(gradeLevel: number): string {
@@ -55,122 +106,73 @@ const generationConfig = {
 const chatSessions = new Map<string, any>();
 
 /**
- * Process the response text to extract SVG diagram if present
- * @param responseText The raw response from Gemini
- * @returns Processed response with extracted SVG data
+ * Process the JSON response from Owlby
+ * @param responseText The raw response from Gemini (should be JSON)
+ * @returns Processed response in the new Owlby format
  */
-function processSvgResponse(responseText: string) {
-  const result = {
-    text: responseText,
-    diagram: null as null | {
-      svg: string;
-      title: string;
-      description: string;
-    },
-  };
-
-  // Extract SVG diagram if present
-  const svgMatch = responseText.match(/<SVG_DIAGRAM>([\s\S]*?)<\/SVG_DIAGRAM>/);
-  const titleMatch = responseText.match(/<SVG_TITLE>([\s\S]*?)<\/SVG_TITLE>/);
-  const descMatch = responseText.match(/<SVG_DESCRIPTION>([\s\S]*?)<\/SVG_DESCRIPTION>/);
-
-  // If we have an SVG diagram, extract and sanitize it
-  if (svgMatch && titleMatch && descMatch) {
-    const rawSvg = svgMatch[1].trim();
-    const title = titleMatch[1].trim();
-    const description = descMatch[1].trim();
-
-    // Basic sanitization (should be enhanced with proper SVG sanitization library)
-    const sanitizedSvg = sanitizeSvg(rawSvg);
-
-    result.diagram = {
-      svg: sanitizedSvg,
-      title,
-      description,
+function processOwlbyResponse(responseText: string) {
+  try {
+    // Try to parse as JSON first
+    const jsonResponse = JSON.parse(responseText);
+    
+    // Validate the expected structure
+    if (jsonResponse.response_text && jsonResponse.interactive_elements) {
+      return {
+        success: true,
+        data: jsonResponse
+      };
+    } else {
+      throw new Error('Invalid JSON structure');
+    }
+  } catch (error) {
+    // If JSON parsing fails, treat as fallback plain text
+    console.warn('Failed to parse JSON response, falling back to plain text:', error);
+    
+    // Create a fallback response structure
+    return {
+      success: false,
+      data: {
+        response_text: {
+          main: responseText,
+          follow_up: "What would you like to learn about next?"
+        },
+        interactive_elements: {
+          followup_buttons: [
+            { text: "Tell me more!", prompt: "Can you tell me more about this topic?" },
+            { text: "Something new", prompt: "Can you teach me something completely different?" }
+          ],
+          learn_more: {
+            prompt: "Explore this topic further",
+            tags: ["learning", "education"]
+          },
+          story_button: {
+            title: "Story Time!",
+            story_prompt: "Tell me a fun story about this topic"
+          }
+        },
+        content_blocks: {
+          safety_filter: false
+        }
+      }
     };
-
-    // Remove the SVG tags from the text response
-    result.text = responseText
-      .replace(/<SVG_DIAGRAM>[\s\S]*?<\/SVG_DIAGRAM>/g, '')
-      .replace(/<SVG_TITLE>[\s\S]*?<\/SVG_TITLE>/g, '')
-      .replace(/<SVG_DESCRIPTION>[\s\S]*?<\/SVG_DESCRIPTION>/g, '')
-      .trim();
   }
-
-  return result;
 }
 
-/**
- * Basic SVG sanitization function
- * This is a placeholder - in a production app you would use a proper SVG sanitization library
- */
-function sanitizeSvg(svg: string): string {
-  // Simple sanitization - ensure it has valid SVG tags
-  if (!svg.includes('<svg') || !svg.includes('</svg>')) {
-    // If not a valid SVG, return an empty SVG
-    return '<svg width="300" height="200" xmlns="http://www.w3.org/2000/svg"><text x="10" y="20" fill="red">Invalid SVG</text></svg>';
-  }
 
-  // More comprehensive sanitization would be implemented here
-  // This would remove potentially dangerous elements and attributes
-
-  return svg;
-}
-
-/**
- * Extract the main educational topic from the query and response
- * Simple implementation that will be enhanced in future versions
- */
-function extractMainTopic(query: string, response: string): string {
-  // For MVP, use the first few words of the query as the topic
-  // This will be enhanced with NLP in the future
-  const words = query.split(' ');
-  if (words.length <= 3) {
-    return query.trim();
-  }
-  
-  // Try to extract a meaningful phrase (first 3-5 words)
-  return words.slice(0, Math.min(5, words.length)).join(' ').trim();
-}
-
-/**
- * Determine if a topic is educational and would benefit from a lesson
- */
-function isEducationalTopic(topic: string): boolean {
-  const educationalKeywords = [
-    'science', 'math', 'history', 'geography', 'biology',
-    'physics', 'chemistry', 'planet', 'animal', 'plant',
-    'country', 'human', 'body', 'art', 'music', 'language',
-    'space', 'dinosaur', 'earth', 'ocean', 'environment',
-    'weather', 'solar', 'atom', 'cell', 'molecule', 'computer',
-    'technology', 'machine', 'energy', 'force', 'gravity',
-    'ecosystem', 'climate', 'culture', 'civilization', 'world'
-  ];
-  
-  const topicLower = topic.toLowerCase();
-  return educationalKeywords.some(keyword => topicLower.includes(keyword));
-}
 
 /**
  * Process the full response to create the enhanced response object
  */
 function processResponse(responseText: string, query: string, gradeLevel: number, chatId: string) {
-  // Process SVG as before
-  const processedSvg = processSvgResponse(responseText);
+  // Process Owlby's JSON response
+  const processedResponse = processOwlbyResponse(responseText);
   
-  // Extract main topic
-  const topic = extractMainTopic(query, processedSvg.text);
-  
-  // Determine if learn more would be appropriate
-  const learnMoreAvailable = isEducationalTopic(topic);
-  
+  // Return the new format with chatId and gradeLevel added
   return {
-    response: processedSvg.text,
+    ...processedResponse.data,
     chatId,
-    diagram: processedSvg.diagram,
-    topic,
     gradeLevel,
-    learnMoreAvailable
+    success: processedResponse.success
   };
 }
 
@@ -214,24 +216,22 @@ export default async function handler(req: any, res: any) {
     }
 
     let responseText;
-    let processedResponse: {
-      response: string;
-      chatId: string;
-      diagram: null | {
-        svg: string;
-        title: string;
-        description: string;
-      };
-      topic: string;
-      gradeLevel: number;
-      learnMoreAvailable: boolean;
-    } = {
-      response: '',
+    let processedResponse: any = {
+      response_text: {
+        main: "I'm having trouble right now. Can you try asking something else?",
+        follow_up: "What would you like to learn about?"
+      },
+      interactive_elements: {
+        followup_buttons: [],
+        learn_more: null,
+        story_button: null
+      },
+      content_blocks: {
+        safety_filter: false
+      },
       chatId,
-      diagram: null,
-      topic: '',
       gradeLevel,
-      learnMoreAvailable: false
+      success: false
     };
     
     try {
@@ -246,21 +246,20 @@ export default async function handler(req: any, res: any) {
     } catch (aiError: any) {
       console.error('API: AI Error:', aiError);
       if (aiError.message && aiError.message.includes('User location is not supported')) {
-        processedResponse.response =
-          "I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?";
+        processedResponse.response_text.main =
+          "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?";
       } else {
-        processedResponse.response =
-          "I'm having trouble processing your request right now. Can you try asking something else?";
+        processedResponse.response_text.main =
+          "Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?";
       }
     }
 
     console.log('API: Responding with', { 
-      response: processedResponse.response.substring(0, 100) + '...',
+      response: processedResponse.response_text?.main?.substring(0, 100) + '...',
       chatId,
-      topic: processedResponse.topic,
       gradeLevel: processedResponse.gradeLevel,
-      learnMoreAvailable: processedResponse.learnMoreAvailable,
-      diagram: processedResponse.diagram ? 'SVG included' : 'No SVG' 
+      success: processedResponse.success,
+      hasInteractiveElements: !!processedResponse.interactive_elements
     });
     
     return res.status(200).json(processedResponse);
