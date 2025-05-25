@@ -1,7 +1,7 @@
-require('dotenv').config();
-// @ts-ignore: Vercel provides types at runtime, and @types/vercel__node is not available
-// <reference types="node" />
+import { config } from 'dotenv';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+
+config();
 // import { VercelRequest, VercelResponse } from '@vercel/node';
 
 const API_KEY = process.env.GEMINI_API_KEY;
