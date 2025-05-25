@@ -7,6 +7,14 @@
     {
       "source": "/update-profile",
       "destination": "/api/update-profile"
+    },
+    {
+      "source": "/learn/lesson",
+      "destination": "/api/learn/lesson"
+    },
+    {
+      "source": "/chat/response",
+      "destination": "/api/chat/response"
     }
   ]
 } 
