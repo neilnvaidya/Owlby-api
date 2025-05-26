@@ -13,8 +13,16 @@
       "destination": "/api/learn/lesson"
     },
     {
+      "source": "/learn/generate-lesson",
+      "destination": "/api/learn/generate-lesson"
+    },
+    {
       "source": "/chat/response",
       "destination": "/api/chat/response"
+    },
+    {
+      "source": "/chat/generate-response",
+      "destination": "/api/chat/generate-response"
     }
   ]
 } 
