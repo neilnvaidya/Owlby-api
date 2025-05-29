@@ -12,3 +12,4 @@ coverage/
 build/
 dist/
 .vercel
+/node_modules
