@@ -1,14 +1,14 @@
 import { SupabaseClient } from '@supabase/supabase-js';
-import { Mock } from 'vitest';
+import { jest } from '@jest/globals';
 
 // Add custom properties to the Supabase client for testing
 declare module '@supabase/supabase-js' {
   interface SupabaseClient<Database, SchemaName, Schema> {
-    select: Mock;
-    eq: Mock;
-    single: Mock;
-    insert: Mock;
-    update: Mock;
+    select: jest.Mock;
+    eq: jest.Mock;
+    single: jest.Mock;
+    insert: jest.Mock;
+    update: jest.Mock;
   }
 }
 
@@ -21,11 +21,11 @@ export interface MockRequest {
 }
 
 export interface MockResponse {
-  status: Mock;
-  json: Mock;
-  send: Mock;
-  setHeader: Mock;
-  end: Mock;
+  status: jest.Mock;
+  json: jest.Mock;
+  send: jest.Mock;
+  setHeader: jest.Mock;
+  end: jest.Mock;
 }
 
 export function mockRequest(): MockRequest;

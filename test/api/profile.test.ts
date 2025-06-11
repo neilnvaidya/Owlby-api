@@ -1,35 +1,53 @@
 // @jest-environment node
-import { test, expect, vi, describe, beforeEach } from 'vitest';
-import { mockRequest, mockResponse } from '../test/mocks';
-import handler from './profile';
-import { verifyToken } from '../lib/auth';
-import { supabase } from '../lib/supabase';
+import { describe, expect, jest, test, beforeEach } from '@jest/globals';
+import { mockRequest, mockResponse } from '../mocks';
+import handler from '../../api/profile';
+import { verifyToken } from '../../lib/auth';
+import { supabase } from '../../lib/supabase';
 
 // Mock auth and supabase
-vi.mock('../lib/auth', () => ({
-  verifyToken: vi.fn(),
+jest.mock('../../lib/auth', () => ({
+  verifyToken: jest.fn(),
 }));
 
-// Update supabase mock to match the actual implementation
-vi.mock('../lib/supabase', () => ({
-  supabase: {
-    from: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    update: vi.fn().mockReturnThis(),
-    single: vi.fn(), // Keep this as it's needed in test cases
-  },
-}));
+// Mock the entire supabase module with proper query builder pattern
+jest.mock('../../lib/supabase', () => {
+  const mockQuery = {
+    select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
+    insert: jest.fn().mockReturnThis(),
+    update: jest.fn().mockReturnThis(),
+    single: jest.fn(),
+  };
+  
+  return {
+    supabase: {
+      from: jest.fn(() => mockQuery),
+    },
+  };
+});
 
 describe('Profile API', () => {
   let req: any;
   let res: any;
+  let mockQuery: any;
   
   beforeEach(() => {
     req = mockRequest();
     res = mockResponse();
-    vi.resetAllMocks();
+    jest.resetAllMocks();
+    
+    // Get the mock query object for direct access
+    mockQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      insert: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      single: jest.fn(),
+    };
+    
+    // Mock supabase.from to return our mock query
+    (supabase.from as any) = jest.fn(() => mockQuery);
     
     // Default mock for token verification
     (verifyToken as any).mockResolvedValue({
@@ -65,11 +83,8 @@ describe('Profile API', () => {
       parent_email: 'parent@example.com',
     };
     
-    // Update to properly mock the Supabase client chain
-    (supabase.from as any).mockReturnThis();
-    (supabase.select as any).mockReturnThis();
-    (supabase.eq as any).mockReturnThis();
-    (supabase.single as any).mockResolvedValue({
+    // Mock the query chain
+    mockQuery.single.mockResolvedValue({
       data: mockUser,
       error: null,
     });
@@ -78,8 +93,8 @@ describe('Profile API', () => {
     
     expect(verifyToken).toHaveBeenCalledWith('valid-token');
     expect(supabase.from).toHaveBeenCalledWith('users');
-    expect(supabase.select).toHaveBeenCalledWith('*');
-    expect(supabase.eq).toHaveBeenCalledWith('auth0_id', 'auth0|123456');
+    expect(mockQuery.select).toHaveBeenCalledWith('*');
+    expect(mockQuery.eq).toHaveBeenCalledWith('auth0_id', 'auth0|123456');
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith({
       user_id: 'auth0|123456',
@@ -98,19 +113,13 @@ describe('Profile API', () => {
     
     // Mock Supabase response chains for better TypeScript compatibility
     // First call - user not found
-    (supabase.from as any).mockReturnThis();
-    (supabase.select as any).mockReturnThis();
-    (supabase.eq as any).mockReturnThis();
-    (supabase.single as any).mockResolvedValueOnce({
+    mockQuery.single.mockResolvedValueOnce({
       data: null,
       error: { code: 'PGRST116' },
     });
     
     // Second call - insert succeeds
-    (supabase.from as any).mockReturnThis();
-    (supabase.insert as any).mockReturnThis();
-    (supabase.select as any).mockReturnThis();
-    (supabase.single as any).mockResolvedValueOnce({
+    mockQuery.single.mockResolvedValueOnce({
       data: {
         auth0_id: 'auth0|123456',
         name: 'Test User',
@@ -123,7 +132,7 @@ describe('Profile API', () => {
     await handler(req, res);
     
     expect(supabase.from).toHaveBeenCalledWith('users');
-    expect(supabase.insert).toHaveBeenCalled();
+    expect(mockQuery.insert).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
   });
   
@@ -138,20 +147,13 @@ describe('Profile API', () => {
     };
     
     // Mock Supabase response chain for the check if user exists
-    (supabase.from as any).mockReturnThis();
-    (supabase.select as any).mockReturnThis();
-    (supabase.eq as any).mockReturnThis();
-    (supabase.single as any).mockResolvedValueOnce({
+    mockQuery.single.mockResolvedValueOnce({
       data: { auth0_id: 'auth0|123456', name: 'Old Name' },
       error: null,
     });
     
     // Mock Supabase response chain for the update operation
-    (supabase.from as any).mockReturnThis();
-    (supabase.update as any).mockReturnThis();
-    (supabase.eq as any).mockReturnThis();
-    (supabase.select as any).mockReturnThis();
-    (supabase.single as any).mockResolvedValueOnce({
+    mockQuery.single.mockResolvedValueOnce({
       data: {
         auth0_id: 'auth0|123456',
         name: 'Updated Name',
@@ -167,7 +169,7 @@ describe('Profile API', () => {
     await handler(req, res);
     
     expect(supabase.from).toHaveBeenCalledWith('users');
-    expect(supabase.update).toHaveBeenCalled();
+    expect(mockQuery.update).toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Updated Name',

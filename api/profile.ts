@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { UserProfile } from './profile.types';
+import { UserProfile } from '../lib/profile-types';
 import { supabase } from '../lib/supabase';
 import { verifyToken } from '../lib/auth';
 

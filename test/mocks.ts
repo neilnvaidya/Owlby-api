@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { vi } from 'vitest';
+import { jest } from '@jest/globals';
 
 export function mockRequest(overrides = {}): VercelRequest {
   return {
@@ -16,11 +16,11 @@ export function mockRequest(overrides = {}): VercelRequest {
 export function mockResponse(): VercelResponse {
   const res: any = {};
   
-  res.status = vi.fn().mockReturnValue(res);
-  res.json = vi.fn().mockReturnValue(res);
-  res.send = vi.fn().mockReturnValue(res);
-  res.setHeader = vi.fn().mockReturnValue(res);
-  res.end = vi.fn().mockReturnValue(res);
+  res.status = jest.fn().mockReturnValue(res);
+  res.json = jest.fn().mockReturnValue(res);
+  res.send = jest.fn().mockReturnValue(res);
+  res.setHeader = jest.fn().mockReturnValue(res);
+  res.end = jest.fn().mockReturnValue(res);
   
   return res as unknown as VercelResponse;
 } 

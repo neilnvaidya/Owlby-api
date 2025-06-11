@@ -23,6 +23,10 @@
     {
       "source": "/chat/generate-response",
       "destination": "/api/chat/generate-response"
+    },
+    {
+      "source": "/feedback/submit",
+      "destination": "/api/feedback/submit"
     }
   ]
 } 

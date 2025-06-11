@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import * as jwksClient from 'jwks-rsa';
+import jwksClient from 'jwks-rsa';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
 const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || '';
