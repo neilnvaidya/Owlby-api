@@ -6,7 +6,7 @@ import {
   Type,
 } from '@google/genai';
 
-const logger = {
+const console = {
   info: (...args: any[]) => console.log('[INFO]', ...args),
   warn: (...args: any[]) => console.warn('[WARN]', ...args),
   error: (...args: any[]) => console.error('[ERROR]', ...args),
@@ -194,7 +194,7 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
       throw new Error('Invalid lesson JSON structure');
     }
   } catch (error) {
-    logger.warn('Failed to parse lesson JSON response, falling back to plain text:', error);
+    console.warn('Failed to parse lesson JSON response, falling back to plain text:', error);
     
     // Create a fallback lesson structure that matches the app's Lesson type
     return {
@@ -261,11 +261,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    logger.info('📚 Lesson Generate API: Request received', req.body);
+    console.info('📚 Lesson Generate API: Request received', req.body);
     const { topic, gradeLevel = 3 } = req.body;
     
     if (!topic) {
-      logger.info('❌ Missing topic');
+      console.info('❌ Missing topic');
       return res.status(400).json({ error: "Topic is required." });
     }
     
@@ -323,16 +323,16 @@ export default async function handler(req: any, res: any) {
     };
     
     try {
-      logger.info('📚 Sending lesson request to Gemini for topic:', topic);
+      console.info('📚 Sending lesson request to Gemini for topic:', topic);
       const response = await ai.models.generateContent({
         model,
         config,
         contents,
       });
       
-      logger.info('📚 Gemini raw result received');
+      console.info('📚 Gemini raw result received');
       const responseText = response.text || '';
-      logger.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
+      console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
       
       // Process complete response
       processedResponse = processLessonResponse(responseText, topic, gradeLevel);
@@ -348,7 +348,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    logger.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
+    console.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
     
     return res.status(200).json(processedResponse);
   } catch (error) {
