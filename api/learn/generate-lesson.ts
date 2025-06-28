@@ -147,9 +147,10 @@ Requirements:
    - Quick: 3 basic MCQs
    - Extended: 2 challenging MCQs with explanations
 
-Technical considerations:
-- Use <br> for line breaks
-- **Bold** with double asterisks
+FORMATTING RULES:
+- Use \\n for line breaks
+- Use **text** for bold formatting (markdown style)
+- Keep all text as plain text with markdown formatting only
 
 You are Owlby, a wise and playful owl teacher. Use "Hoot hoot!" expressions and maintain your friendly, encouraging personality throughout the lesson.`,
       }
@@ -189,54 +190,8 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
       throw new Error('Invalid lesson JSON structure');
     }
   } catch (error) {
-    console.warn('Failed to parse lesson JSON response, falling back to plain text:', error);
-    
-    // Create a fallback lesson structure that matches the app's Lesson type
-    return {
-      topic: topic,
-      gradeLevel: gradeLevel,
-      title: "Learning Adventure",
-      introduction: "Hoot hoot! Let's explore something amazing together!\n\nWe're going to discover new and exciting things!",
-      keyPoints: [
-        "Learning new things helps your brain grow stronger!",
-        "Every question you ask makes you smarter!",
-        "Curiosity is one of the most powerful tools for learning!"
-      ],
-      keywords: [
-        {
-          term: "Learning",
-          definition: "The process of gaining new knowledge or skills"
-        },
-        {
-          term: "Curiosity",
-          definition: "Being interested in learning about the world around you"
-        }
-      ],
-      quickQuiz: {
-        questions: [
-          {
-            question: "What helps your brain grow stronger?",
-            options: ["Learning new things", "Staying the same", "Not asking questions", "Being bored"],
-            correctAnswerIndex: 0
-          },
-          {
-            question: "What is curiosity?",
-            options: ["Being scared", "Being interested in learning", "Not caring", "Sleeping"],
-            correctAnswerIndex: 1
-          }
-        ]
-      },
-      extendedQuiz: {
-        questions: [
-          {
-            question: "Why is asking questions important for learning?",
-            options: ["It's not important", "It helps us understand better", "It confuses us", "It wastes time"],
-            correctAnswerIndex: 1,
-            explanation: "Asking questions helps us think deeper and understand topics better!"
-          }
-        ]
-      }
-    };
+    console.error('Failed to parse lesson JSON response:', error);
+    throw new Error(`Failed to generate lesson: Invalid response format. Please try again.`);
   }
 }
 
@@ -280,68 +235,21 @@ export default async function handler(req: any, res: any) {
       },
     ];
 
-    let processedResponse: any = {
-      topic: topic,
-      gradeLevel: gradeLevel,
-      title: "Learning Adventure",
-      introduction: "Hoot hoot! Let's explore something amazing together!\n\nWe're going to discover new and exciting things!",
-      keyPoints: [
-        "Learning new things helps your brain grow stronger!",
-        "Every question you ask makes you smarter!",
-        "Curiosity is one of the most powerful tools for learning!"
-      ],
-      keywords: [
-        {
-          term: "Learning",
-          definition: "The process of gaining new knowledge or skills"
-        }
-      ],
-      quickQuiz: {
-        questions: [
-          {
-            question: "What helps your brain grow stronger?",
-            options: ["Learning new things", "Staying the same", "Not asking questions", "Being bored"],
-            correctAnswerIndex: 0
-          }
-        ]
-      },
-      extendedQuiz: {
-        questions: [
-          {
-            question: "Why is asking questions important for learning?",
-            options: ["It's not important", "It helps us understand better", "It confuses us", "It wastes time"],
-            correctAnswerIndex: 1,
-            explanation: "Asking questions helps us think deeper and understand topics better!"
-          }
-        ]
-      }
-    };
+
     
-    try {
-      console.info('📚 Sending lesson request to Gemini for topic:', topic);
-      const response = await ai.models.generateContent({
-        model,
-        config,
-        contents,
-      });
-      
-      console.info('📚 Gemini raw result received');
-      const responseText = response.text || '';
-      console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
-      
-      // Process complete response
-      processedResponse = processLessonResponse(responseText, topic, gradeLevel);
-      
-    } catch (aiError: any) {
-      console.error('❌ AI Error:', aiError);
-      if (aiError.message && aiError.message.includes('User location is not supported')) {
-        processedResponse.introduction =
-          "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Let's try learning about this topic in a different way!";
-      } else {
-        processedResponse.introduction =
-          "Hoo-hoo! I'm having trouble creating this lesson right now. Let's try a different approach to learning about this topic!";
-      }
-    }
+    console.info('📚 Sending lesson request to Gemini for topic:', topic);
+    const response = await ai.models.generateContent({
+      model,
+      config,
+      contents,
+    });
+    
+    console.info('📚 Gemini raw result received');
+    const responseText = response.text || '';
+    console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
+    
+    // Process complete response - this will throw if parsing fails
+    const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
 
     console.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
     
