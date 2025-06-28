@@ -1,13 +1,4 @@
 {
-  "ignore": [
-    "test/**/*",
-    "__tests__/**/*",
-    "*.test.*",
-    "*.spec.*",
-    "jest.config.*",
-    "**/*.test.*",
-    "**/*.spec.*"
-  ],
   "rewrites": [
     {
       "source": "/verify-email",

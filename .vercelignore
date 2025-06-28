@@ -1,0 +1,9 @@
+test/
+__tests__/
+*.test.*
+*.spec.*
+jest.config.*
+**/*.test.*
+**/*.spec.*
+*.md
+README.md 
