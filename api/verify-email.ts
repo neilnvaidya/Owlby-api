@@ -18,7 +18,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       message
     } = req.query;
 
-    console.log('📧 Email verification callback received:', {
+    logger.info('📧 Email verification callback received:', {
       user_id,
       email,
       email_verified,
@@ -36,7 +36,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
                      token;
 
     if (isSuccess) {
-      console.log('✅ Email verification successful for:', email || user_id);
+      logger.info('✅ Email verification successful for:', email || user_id);
       
       // Redirect to web app with success
       const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
@@ -49,7 +49,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.redirect(302, redirectUrl.toString());
       
     } else {
-      console.log('❌ Email verification failed for:', email || user_id);
+      logger.info('❌ Email verification failed for:', email || user_id);
       
       // Redirect to web app with error
       const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');

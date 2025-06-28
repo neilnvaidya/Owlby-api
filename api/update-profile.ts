@@ -9,7 +9,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     const { name, age, userId } = req.body;
     const authHeader = req.headers.authorization;
     
-    console.log('📝 Profile update request:', { name, age, userId, hasAuth: !!authHeader });
+    logger.info('📝 Profile update request:', { name, age, userId, hasAuth: !!authHeader });
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({ 
@@ -35,7 +35,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
     // For now, we'll simulate success and log the data
     // In production, this would update Auth0 user metadata
-    console.log('✅ Profile updated successfully:', { 
+    logger.info('✅ Profile updated successfully:', { 
       userId, 
       name: name.trim(), 
       age: age.toString() 

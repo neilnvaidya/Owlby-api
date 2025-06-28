@@ -1,6 +1,7 @@
 {
   "name": "owlby-api",
   "version": "1.0.0",
+  "description": "OwlbyAI API - Backend services for privacy-first AI educational platform",
   "main": "index.js",
   "scripts": {
     "test": "jest",
@@ -11,13 +12,12 @@
     "url": "git+https://github.com/neilnvaidya/Owlby-api.git"
   },
   "keywords": [],
-  "author": "",
+  "author": "OwlbyAI LLP",
   "license": "ISC",
   "bugs": {
     "url": "https://github.com/neilnvaidya/Owlby-api/issues"
   },
-  "homepage": "https://github.com/neilnvaidya/Owlby-api#readme",
-  "description": "",
+  "homepage": "https://api.owlby.com",
   "dependencies": {
     "@google/genai": "^1.4.0",
     "@supabase/supabase-js": "^2.49.8",

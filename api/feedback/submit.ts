@@ -121,7 +121,7 @@ export default async function handler(req: any, res: any) {
         user_id = decoded.sub;
       } catch (error) {
         // If token is invalid, treat as anonymous feedback
-        console.warn('Invalid token for feedback submission, treating as anonymous');
+        logger.warn('Invalid token for feedback submission, treating as anonymous');
       }
     }
 

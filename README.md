@@ -1,6 +1,6 @@
 # Owlby API
 
-This is the backend API for the Owlby platform, providing secure, AI-powered chat and user profile management for the mobile app.
+This is the backend API for the OwlbyAI platform, providing secure, AI-powered chat and user profile management for the mobile app. Developed by OwlbyAI LLP.
 
 ## MVP Endpoints
 - **POST /api/chat/response** — AI-powered chat response and lesson generation

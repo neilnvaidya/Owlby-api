@@ -205,11 +205,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.log('🦉 Chat Generate Response API: Request received', req.body);
+    logger.info('🦉 Chat Generate Response API: Request received', req.body);
     const { message, chatId, gradeLevel = 3 } = req.body;
     
     if (!message || !chatId) {
-      console.log('❌ Missing message or chatId');
+      logger.info('❌ Missing message or chatId');
       return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
     }
     
@@ -258,16 +258,16 @@ export default async function handler(req: any, res: any) {
     };
     
     try {
-      console.log('🦉 Sending message to Gemini:', message);
+      logger.info('🦉 Sending message to Gemini:', message);
       const response = await ai.models.generateContent({
         model,
         config,
         contents,
       });
       
-      console.log('🦉 Gemini raw result received');
+      logger.info('🦉 Gemini raw result received');
       const responseText = response.text || '';
-      console.log('🦉 Gemini response text:', responseText.substring(0, 200) + '...');
+      logger.info('🦉 Gemini response text:', responseText.substring(0, 200) + '...');
       
       // Process complete response
       processedResponse = processResponse(responseText, message, gradeLevel, chatId);
@@ -282,7 +282,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    console.log('✅ Chat Generate Response API: Responding with success:', processedResponse.success);
+    logger.info('✅ Chat Generate Response API: Responding with success:', processedResponse.success);
     
     return res.status(200).json(processedResponse);
   } catch (error) {

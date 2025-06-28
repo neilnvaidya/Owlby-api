@@ -6,6 +6,13 @@ import {
   Type,
 } from '@google/genai';
 
+const logger = {
+  info: (...args: any[]) => console.log('[INFO]', ...args),
+  warn: (...args: any[]) => console.warn('[WARN]', ...args),
+  error: (...args: any[]) => console.error('[ERROR]', ...args),
+  debug: (...args: any[]) => console.debug('[DEBUG]', ...args),
+};
+
 config();
 
 const API_KEY = process.env.GEMINI_API_KEY;
@@ -17,48 +24,7 @@ const ai = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
-/**
- * Fetch an image from Wikimedia Commons API
- * @param searchTerm The term to search for
- * @returns Promise<string | null> URL of the image or null if not found
- */
-async function fetchWikimediaImage(searchTerm: string): Promise<string | null> {
-  try {
-    const searchUrl = `https://commons.wikimedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchTerm)}&srnamespace=6&format=json&origin=*&srlimit=5`;
-    
-    const searchResponse = await fetch(searchUrl);
-    const searchData = await searchResponse.json();
-    
-    if (searchData.query?.search?.length > 0) {
-      // Get the first result
-      const firstResult = searchData.query.search[0];
-      const fileName = firstResult.title.replace('File:', '');
-      
-      // Get the actual file URL
-      const fileUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(fileName)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
-      
-      const fileResponse = await fetch(fileUrl);
-      const fileData = await fileResponse.json();
-      
-      const pages = fileData.query?.pages;
-      if (pages) {
-        const pageId = Object.keys(pages)[0];
-        const imageUrl = pages[pageId]?.imageinfo?.[0]?.url;
-        
-        if (imageUrl) {
-          console.log('📚 Found Wikimedia image:', imageUrl);
-          return imageUrl;
-        }
-      }
-    }
-    
-    console.log('📚 No suitable Wikimedia image found for:', searchTerm);
-    return null;
-  } catch (error) {
-    console.error('📚 Error fetching Wikimedia image:', error);
-    return null;
-  }
-}
+
 
 // Get the lesson generation configuration with safety settings and response schema
 const getLessonConfig = (topic: string, gradeLevel: number) => {
@@ -166,24 +132,7 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
                 },
               },
             },
-            imageSuggestions: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  description: {
-                    type: Type.STRING,
-                  },
-                  searchQuery: {
-                    type: Type.STRING,
-                  },
-                  safeSourceExample: {
-                    type: Type.STRING,
-                    description: "Example: 'Wikimedia Commons' URL when available",
-                  },
-                },
-              },
-            },
+
           },
         },
       },
@@ -202,13 +151,10 @@ Requirements:
 5. **Quizzes**: 
    - Quick: 3 basic MCQs
    - Extended: 2 challenging MCQs with explanations
-6. **Images**: Suggest 2-3 safe image search queries with example sources
 
 Technical considerations:
 - Use <br> for line breaks
 - **Bold** with double asterisks
-- For images: Prefer Wikimedia URLs when possible
-- If no relevant images, omit "imageSuggestions"
 
 You are Owlby, a wise and playful owl teacher. Use "Hoot hoot!" expressions and maintain your friendly, encouraging personality throughout the lesson.`,
       }
@@ -228,102 +174,72 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
     
     // Validate the expected structure
     if (jsonResponse.lesson) {
-      // Transform the new format to the legacy format for backward compatibility
+      // Return the format that matches the React Native app's Lesson type
       const lesson = jsonResponse.lesson;
       return {
-        success: true,
-        lesson_title: lesson.title,
-        grade_level: gradeLevel,
         topic: topic,
-        introduction: {
-          hook: lesson.introduction.split('\\n')[0] || lesson.introduction,
-          overview: lesson.introduction.split('\\n').slice(1).join(' ') || "Let's explore this fascinating topic together!"
+        gradeLevel: gradeLevel,
+        title: lesson.title,
+        introduction: lesson.introduction.replace(/\\n/g, '\n'),
+        keyPoints: lesson.keyPoints || [],
+        keywords: lesson.keywords || [],
+        quickQuiz: {
+          questions: lesson.quickQuiz || []
         },
-        main_content: lesson.keyPoints.map((point: string, index: number) => ({
-          section_title: `Key Point ${index + 1}`,
-          content: point,
-          key_takeaway: point.replace(/\*\*(.*?)\*\*/g, '$1')
-        })),
-        fun_facts: lesson.keywords.slice(0, 3).map((kw: any) => `**${kw.term}**: ${kw.definition}`),
-        interactive_elements: {
-          questions: lesson.quickQuiz.map((q: any) => q.question),
-          activities: [
-            "Draw a picture of what you learned today!",
-            "Try exploring this topic with a friend or family member!",
-            "Think of three questions you'd like to ask about this topic!"
-          ]
-        },
-        conclusion: {
-          summary: `We've learned so many interesting things about ${topic}!`,
-          encouragement: "Keep asking questions and exploring the world around you!",
-          next_steps: "What other topics would you like to explore next?"
-        },
-        vocabulary: lesson.keywords,
-        additional_resources: {
-          books: ["Ask your librarian for books about this topic!"],
-          websites: ["Talk to a grown-up about finding safe websites to learn more!"],
-          activities: ["Keep exploring and asking questions!"]
-        },
-        // Include the new format data as well
-        newFormat: {
-          lesson: lesson
+        extendedQuiz: {
+          questions: lesson.extendedQuiz || []
         }
       };
     } else {
       throw new Error('Invalid lesson JSON structure');
     }
   } catch (error) {
-    console.warn('Failed to parse lesson JSON response, falling back to plain text:', error);
+    logger.warn('Failed to parse lesson JSON response, falling back to plain text:', error);
     
-    // Create a fallback lesson structure
+    // Create a fallback lesson structure that matches the app's Lesson type
     return {
-      success: false,
-      lesson_title: "Learning Adventure",
-      grade_level: gradeLevel,
       topic: topic,
-      introduction: {
-        hook: "Hoot hoot! Let's explore something amazing together!",
-        overview: "We're going to discover new and exciting things!"
-      },
-      main_content: [
-        {
-          section_title: "What We're Learning",
-          content: responseText,
-          key_takeaway: "Learning is always an adventure!"
-        }
-      ],
-      fun_facts: [
+      gradeLevel: gradeLevel,
+      title: "Learning Adventure",
+      introduction: "Hoot hoot! Let's explore something amazing together!\n\nWe're going to discover new and exciting things!",
+      keyPoints: [
         "Learning new things helps your brain grow stronger!",
         "Every question you ask makes you smarter!",
         "Curiosity is one of the most powerful tools for learning!"
       ],
-      interactive_elements: {
-        questions: [
-          "What would you like to learn more about?",
-          "How does this connect to things you already know?",
-          "What questions do you have about this topic?"
-        ],
-        activities: [
-          "Try exploring this topic with a friend or family member!",
-          "Draw a picture of what you learned today!",
-          "Think of three questions you'd like to ask about this topic!"
-        ]
-      },
-      conclusion: {
-        summary: "We've learned so many interesting things today!",
-        encouragement: "Keep asking questions and exploring the world around you!",
-        next_steps: "What other topics would you like to explore next?"
-      },
-      vocabulary: [
+      keywords: [
         {
           term: "Learning",
           definition: "The process of gaining new knowledge or skills"
+        },
+        {
+          term: "Curiosity",
+          definition: "Being interested in learning about the world around you"
         }
       ],
-      additional_resources: {
-        books: ["Ask your librarian for books about this topic!"],
-        websites: ["Talk to a grown-up about finding safe websites to learn more!"],
-        activities: ["Keep exploring and asking questions!"]
+      quickQuiz: {
+        questions: [
+          {
+            question: "What helps your brain grow stronger?",
+            options: ["Learning new things", "Staying the same", "Not asking questions", "Being bored"],
+            correctAnswerIndex: 0
+          },
+          {
+            question: "What is curiosity?",
+            options: ["Being scared", "Being interested in learning", "Not caring", "Sleeping"],
+            correctAnswerIndex: 1
+          }
+        ]
+      },
+      extendedQuiz: {
+        questions: [
+          {
+            question: "Why is asking questions important for learning?",
+            options: ["It's not important", "It helps us understand better", "It confuses us", "It wastes time"],
+            correctAnswerIndex: 1,
+            explanation: "Asking questions helps us think deeper and understand topics better!"
+          }
+        ]
       }
     };
   }
@@ -345,11 +261,11 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.log('📚 Lesson Generate API: Request received', req.body);
+    logger.info('📚 Lesson Generate API: Request received', req.body);
     const { topic, gradeLevel = 3 } = req.body;
     
     if (!topic) {
-      console.log('❌ Missing topic');
+      logger.info('❌ Missing topic');
       return res.status(400).json({ error: "Topic is required." });
     }
     
@@ -370,103 +286,76 @@ export default async function handler(req: any, res: any) {
     ];
 
     let processedResponse: any = {
-      lesson_title: "Learning Adventure",
-      grade_level: gradeLevel,
       topic: topic,
-      introduction: {
-        hook: "Hoot hoot! Let's explore something amazing together!",
-        overview: "We're going to discover new and exciting things!"
-      },
-      main_content: [
-        {
-          section_title: "What We're Learning",
-          content: "Let's dive into this fascinating topic!",
-          key_takeaway: "Learning is always an adventure!"
-        }
-      ],
-      fun_facts: [
+      gradeLevel: gradeLevel,
+      title: "Learning Adventure",
+      introduction: "Hoot hoot! Let's explore something amazing together!\n\nWe're going to discover new and exciting things!",
+      keyPoints: [
         "Learning new things helps your brain grow stronger!",
         "Every question you ask makes you smarter!",
         "Curiosity is one of the most powerful tools for learning!"
       ],
-      interactive_elements: {
-        questions: [
-          "What would you like to learn more about?",
-          "How does this connect to things you already know?",
-          "What questions do you have about this topic?"
-        ],
-        activities: [
-          "Try exploring this topic with a friend or family member!",
-          "Draw a picture of what you learned today!",
-          "Think of three questions you'd like to ask about this topic!"
-        ]
-      },
-      conclusion: {
-        summary: "We've learned so many interesting things today!",
-        encouragement: "Keep asking questions and exploring the world around you!",
-        next_steps: "What other topics would you like to explore next?"
-      },
-      vocabulary: [
+      keywords: [
         {
           term: "Learning",
           definition: "The process of gaining new knowledge or skills"
         }
       ],
-      additional_resources: {
-        books: ["Ask your librarian for books about this topic!"],
-        websites: ["Talk to a grown-up about finding safe websites to learn more!"],
-        activities: ["Keep exploring and asking questions!"]
+      quickQuiz: {
+        questions: [
+          {
+            question: "What helps your brain grow stronger?",
+            options: ["Learning new things", "Staying the same", "Not asking questions", "Being bored"],
+            correctAnswerIndex: 0
+          }
+        ]
       },
-      success: false
+      extendedQuiz: {
+        questions: [
+          {
+            question: "Why is asking questions important for learning?",
+            options: ["It's not important", "It helps us understand better", "It confuses us", "It wastes time"],
+            correctAnswerIndex: 1,
+            explanation: "Asking questions helps us think deeper and understand topics better!"
+          }
+        ]
+      }
     };
     
     try {
-      console.log('📚 Sending lesson request to Gemini for topic:', topic);
+      logger.info('📚 Sending lesson request to Gemini for topic:', topic);
       const response = await ai.models.generateContent({
         model,
         config,
         contents,
       });
       
-      console.log('📚 Gemini raw result received');
+      logger.info('📚 Gemini raw result received');
       const responseText = response.text || '';
-      console.log('📚 Gemini response text:', responseText.substring(0, 200) + '...');
+      logger.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
       
       // Process complete response
       processedResponse = processLessonResponse(responseText, topic, gradeLevel);
       
-      // Try to fetch a Wikimedia image for the topic
-      try {
-        const imageUrl = await fetchWikimediaImage(topic);
-        if (imageUrl) {
-          processedResponse.image_url = imageUrl;
-        }
-      } catch (imageError) {
-        console.log('📚 Could not fetch image for topic:', topic, imageError);
-      }
-      
-      processedResponse.success = true;
-      
     } catch (aiError: any) {
       console.error('❌ AI Error:', aiError);
       if (aiError.message && aiError.message.includes('User location is not supported')) {
-        processedResponse.introduction.hook =
+        processedResponse.introduction =
           "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Let's try learning about this topic in a different way!";
       } else {
-        processedResponse.introduction.hook =
+        processedResponse.introduction =
           "Hoo-hoo! I'm having trouble creating this lesson right now. Let's try a different approach to learning about this topic!";
       }
     }
 
-    console.log('✅ Lesson Generate API: Responding with success:', processedResponse.success);
+    logger.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
     
     return res.status(200).json(processedResponse);
   } catch (error) {
     console.error('❌ Lesson Generate API Error:', error);
     return res.status(500).json({ 
       error: 'An unexpected error occurred while generating the lesson.',
-      topic: req.body?.topic,
-      success: false
+      topic: req.body?.topic
     });
   }
 } 
