@@ -215,7 +215,7 @@ export default async function handler(req: any, res: any) {
     
     // Get the configuration for this chat
     const config = getChatConfig(gradeLevel);
-    const model = 'gemini-2.0-flash-exp';
+    const model = 'gemini-2.5-flash';
     
     // Create the contents array with user input
     const contents = [
