@@ -18,7 +18,6 @@ export interface FeedbackSubmission {
     additional_comments?: string;
   };
   context: {
-    user_type: 'child' | 'parent' | 'teacher';
     child_age?: number;
     usage_frequency?: 'daily' | 'weekly' | 'monthly' | 'first_time';
     device_type: 'ios' | 'android' | 'web';
@@ -85,15 +84,9 @@ export default async function handler(req: any, res: any) {
     }
 
     // Validate context fields
-    const validUserTypes = ['child', 'parent', 'teacher'];
     const validDeviceTypes = ['ios', 'android', 'web'];
     const validUsageFrequencies = ['daily', 'weekly', 'monthly', 'first_time'];
 
-    if (!validUserTypes.includes(context.user_type)) {
-      return res.status(400).json({ 
-        error: 'Invalid user_type. Must be: child, parent, or teacher' 
-      });
-    }
 
     if (!validDeviceTypes.includes(context.device_type)) {
       return res.status(400).json({ 
@@ -150,7 +143,6 @@ export default async function handler(req: any, res: any) {
       additional_comments: sanitizeText(text_responses.additional_comments),
       
       // Context
-      user_type: context.user_type,
       child_age: context.child_age || null,
       usage_frequency: context.usage_frequency || null,
       device_type: context.device_type,
