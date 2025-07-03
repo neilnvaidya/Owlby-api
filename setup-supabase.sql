@@ -1,5 +1,75 @@
--- Owlby Feedback Table Creation Script
+-- Owlby Database Schema Setup Script
 -- Run this in your Supabase SQL Editor
+
+-- ===============================
+-- USER PROFILES TABLE
+-- ===============================
+
+-- Create users table for Owlby profile data
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  auth0_id TEXT UNIQUE NOT NULL,  -- Auth0 user ID (e.g., "auth0|123456" or "google-oauth2|123456")
+  email TEXT NOT NULL,
+  name TEXT,
+  avatar_url TEXT,
+  
+  -- Owlby-specific onboarding data
+  grade_level INTEGER CHECK (grade_level >= 0 AND grade_level <= 12),
+  interests TEXT[],  -- Array of interests
+  achievements TEXT[],  -- Array of achievements
+  parent_email TEXT,
+  
+  -- Metadata
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  last_login_at TIMESTAMP,
+  
+  -- Analytics data
+  total_sessions INTEGER DEFAULT 0,
+  total_chat_messages INTEGER DEFAULT 0,
+  total_lessons_completed INTEGER DEFAULT 0,
+  total_stories_generated INTEGER DEFAULT 0
+);
+
+-- Create indexes for performance
+CREATE INDEX IF NOT EXISTS idx_users_auth0_id ON users(auth0_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_users_grade_level ON users(grade_level);
+
+-- Add RLS (Row Level Security) policies for users table
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can read their own profile
+CREATE POLICY "Users can view own profile" ON users
+  FOR SELECT USING (auth.uid()::text = auth0_id);
+
+-- Policy: Users can update their own profile
+CREATE POLICY "Users can update own profile" ON users
+  FOR UPDATE USING (auth.uid()::text = auth0_id);
+
+-- Policy: Service role can manage all users (for API operations)
+CREATE POLICY "Service role can manage users" ON users
+  FOR ALL USING (auth.role() = 'service_role');
+
+-- Function to automatically update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger to automatically update updated_at when users table is modified
+CREATE TRIGGER update_users_updated_at 
+  BEFORE UPDATE ON users 
+  FOR EACH ROW 
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ===============================
+-- FEEDBACK TABLE
+-- ===============================
 
 -- Create feedback table
 CREATE TABLE feedback (
@@ -58,8 +128,38 @@ CREATE POLICY "Anyone can submit feedback" ON feedback
 CREATE POLICY "Service role can view all feedback" ON feedback
   FOR ALL USING (auth.role() = 'service_role');
 
--- Insert a test feedback entry to verify the table works
+-- ===============================
+-- DATA RELATIONSHIPS & SAMPLE DATA
+-- ===============================
+
+-- Add foreign key relationship between feedback and users (optional, allows orphaned feedback)
+-- This is optional to allow anonymous feedback that doesn't link to a user
+ALTER TABLE feedback 
+  ADD CONSTRAINT fk_feedback_user 
+  FOREIGN KEY (user_id) 
+  REFERENCES users(auth0_id) 
+  ON DELETE SET NULL;  -- If user is deleted, keep feedback but set user_id to null
+
+-- Insert sample user to test the users table
+INSERT INTO users (
+  auth0_id,
+  email,
+  name,
+  grade_level,
+  interests,
+  parent_email
+) VALUES (
+  'auth0|test123456',
+  'test@owlby.com',
+  'Test Student',
+  3,
+  ARRAY['space', 'math', 'animals'],
+  'parent@owlby.com'
+) ON CONFLICT (auth0_id) DO NOTHING;  -- Avoid duplicates if script is run multiple times
+
+-- Insert a test feedback entry to verify the tables work together
 INSERT INTO feedback (
+  user_id,
   feedback_type,
   category,
   overall_rating,
@@ -69,15 +169,41 @@ INSERT INTO feedback (
   app_version,
   is_anonymous
 ) VALUES (
+  'auth0|test123456',
   'general',
   'other',
   5,
-  'Test feedback submission - table created successfully!',
+  'Test feedback submission - database schema created successfully!',
   'child',
   'ios',
   '1.0.0',
-  true
-);
+  false
+) ON CONFLICT DO NOTHING;
 
--- Verify the table was created correctly
-SELECT * FROM feedback WHERE feedback_type = 'general' LIMIT 1; 
+-- ===============================
+-- VERIFICATION QUERIES
+-- ===============================
+
+-- Verify the users table was created correctly
+SELECT 'Users table verification:' as status;
+SELECT auth0_id, email, name, grade_level, array_length(interests, 1) as interest_count
+FROM users WHERE auth0_id = 'auth0|test123456';
+
+-- Verify the feedback table relationship works
+SELECT 'Feedback-User relationship verification:' as status;
+SELECT f.feedback_type, f.overall_rating, u.name as user_name, u.grade_level
+FROM feedback f 
+LEFT JOIN users u ON f.user_id = u.auth0_id 
+WHERE f.user_id = 'auth0|test123456'
+LIMIT 1;
+
+-- Show table structure summary
+SELECT 'Database schema summary:' as status;
+SELECT 
+  schemaname,
+  tablename,
+  (SELECT count(*) FROM information_schema.columns WHERE table_name = tablename) as column_count
+FROM pg_tables 
+WHERE schemaname = 'public' 
+AND tablename IN ('users', 'feedback')
+ORDER BY tablename; 
