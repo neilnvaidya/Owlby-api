@@ -223,7 +223,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         `);
       } else {
         // Web redirect for non-mobile devices
-      const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
+      const redirectUrl = new URL('/verify-email', process.env.NEXT_PUBLIC_APP_URL);
       redirectUrl.searchParams.set('success', 'false');
       redirectUrl.searchParams.set('message', 
         (typeof message === 'string' ? message : null) || 'Email verification failed'
@@ -317,7 +317,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       `);
     } else {
       // Web redirect for non-mobile devices
-    const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
+    const redirectUrl = new URL('/verify-email', process.env.NEXT_PUBLIC_APP_URL);
     redirectUrl.searchParams.set('success', 'false');
     redirectUrl.searchParams.set('message', 'Verification service error');
     
