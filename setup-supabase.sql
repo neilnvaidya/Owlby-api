@@ -13,18 +13,28 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT,
   avatar_url TEXT,
   
-  -- Owlby-specific onboarding data
+  -- Basic profile info
+  age INTEGER CHECK (age >= 5 AND age <= 18),
   grade_level INTEGER CHECK (grade_level >= 0 AND grade_level <= 12),
   interests TEXT[],  -- Array of interests
-  achievements TEXT[],  -- Array of achievements
   parent_email TEXT,
+  
+  -- Complex profile data stored as JSONB
+  achievements JSONB DEFAULT '[]'::jsonb,  -- Array of achievement objects
+  stats JSONB DEFAULT '{}'::jsonb,  -- User stats object
+  preferences JSONB DEFAULT '{}'::jsonb,  -- User preferences object
+  learning_progress JSONB DEFAULT '{}'::jsonb,  -- Learning progress object
+  
+  -- Profile completion status
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  profile_completed BOOLEAN DEFAULT FALSE,
   
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   last_login_at TIMESTAMP,
   
-  -- Analytics data
+  -- Analytics data (for backwards compatibility)
   total_sessions INTEGER DEFAULT 0,
   total_chat_messages INTEGER DEFAULT 0,
   total_lessons_completed INTEGER DEFAULT 0,
@@ -36,6 +46,14 @@ CREATE INDEX IF NOT EXISTS idx_users_auth0_id ON users(auth0_id);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_grade_level ON users(grade_level);
+CREATE INDEX IF NOT EXISTS idx_users_onboarding_completed ON users(onboarding_completed);
+CREATE INDEX IF NOT EXISTS idx_users_last_login_at ON users(last_login_at DESC);
+
+-- JSONB indexes for complex queries
+CREATE INDEX IF NOT EXISTS idx_users_achievements ON users USING GIN (achievements);
+CREATE INDEX IF NOT EXISTS idx_users_stats ON users USING GIN (stats);
+CREATE INDEX IF NOT EXISTS idx_users_preferences ON users USING GIN (preferences);
+CREATE INDEX IF NOT EXISTS idx_users_learning_progress ON users USING GIN (learning_progress);
 
 -- Add RLS (Row Level Security) policies for users table
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -67,12 +85,86 @@ CREATE TRIGGER update_users_updated_at
   FOR EACH ROW 
   EXECUTE FUNCTION update_updated_at_column();
 
+-- Function to initialize default user profile data
+CREATE OR REPLACE FUNCTION initialize_user_profile_data()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Set default achievements if not provided
+    IF NEW.achievements IS NULL OR NEW.achievements = '[]'::jsonb THEN
+        NEW.achievements = jsonb_build_array(
+            jsonb_build_object(
+                'id', 'first_login',
+                'icon', 'star',
+                'title', 'Welcome to Owlby!',
+                'description', 'Joined the Owlby learning community',
+                'earned', true,
+                'earned_at', NOW(),
+                'category', 'milestone',
+                'difficulty', 'bronze',
+                'points', 10
+            )
+        );
+    END IF;
+    
+    -- Set default stats if not provided
+    IF NEW.stats IS NULL OR NEW.stats = '{}'::jsonb THEN
+        NEW.stats = jsonb_build_object(
+            'stars_earned', 0,
+            'total_lessons', 0,
+            'total_quizzes', 0,
+            'streak_days', 0,
+            'stories_created', 0,
+            'chat_messages', 0,
+            'topics_explored', 0,
+            'quiz_correct_answers', 0,
+            'quiz_total_answers', 0,
+            'learning_minutes', 0,
+            'favorite_subjects', '[]'::jsonb,
+            'last_activity_at', NOW()
+        );
+    END IF;
+    
+    -- Set default preferences if not provided
+    IF NEW.preferences IS NULL OR NEW.preferences = '{}'::jsonb THEN
+        NEW.preferences = jsonb_build_object(
+            'notifications_enabled', true,
+            'sound_effects_enabled', true,
+            'haptic_feedback_enabled', true,
+            'dark_mode_enabled', false,
+            'difficulty_level', 'intermediate',
+            'learning_reminders', true,
+            'safe_mode_enabled', true
+        );
+    END IF;
+    
+    -- Set default learning progress if not provided
+    IF NEW.learning_progress IS NULL OR NEW.learning_progress = '{}'::jsonb THEN
+        NEW.learning_progress = jsonb_build_object(
+            'current_grade_level', COALESCE(NEW.grade_level, 1),
+            'completed_topics', '[]'::jsonb,
+            'in_progress_topics', '[]'::jsonb,
+            'mastered_skills', '[]'::jsonb,
+            'areas_for_improvement', '[]'::jsonb,
+            'learning_goals', '[]'::jsonb
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger to initialize profile data on insert
+CREATE TRIGGER initialize_user_profile_data_trigger 
+  BEFORE INSERT ON users 
+  FOR EACH ROW 
+  EXECUTE FUNCTION initialize_user_profile_data();
+
 -- ===============================
 -- FEEDBACK TABLE
 -- ===============================
 
 -- Create feedback table
-CREATE TABLE feedback (
+CREATE TABLE IF NOT EXISTS feedback (
   id SERIAL PRIMARY KEY,
   user_id TEXT,
   feedback_type TEXT NOT NULL CHECK (feedback_type IN ('general', 'bug_report', 'feature_request', 'learning_experience')),
@@ -108,10 +200,10 @@ CREATE TABLE feedback (
 );
 
 -- Create index for performance
-CREATE INDEX idx_feedback_created_at ON feedback(created_at DESC);
-CREATE INDEX idx_feedback_user_id ON feedback(user_id);
-CREATE INDEX idx_feedback_type ON feedback(feedback_type);
-CREATE INDEX idx_feedback_category ON feedback(category);
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
+CREATE INDEX IF NOT EXISTS idx_feedback_type ON feedback(feedback_type);
+CREATE INDEX IF NOT EXISTS idx_feedback_category ON feedback(category);
 
 -- Add RLS (Row Level Security) policies
 ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
@@ -140,22 +232,30 @@ ALTER TABLE feedback
   REFERENCES users(auth0_id) 
   ON DELETE SET NULL;  -- If user is deleted, keep feedback but set user_id to null
 
--- Insert sample user to test the users table
+-- Insert sample user to test the enhanced users table
 INSERT INTO users (
   auth0_id,
   email,
   name,
+  age,
   grade_level,
   interests,
-  parent_email
+  parent_email,
+  onboarding_completed,
+  profile_completed
 ) VALUES (
   'auth0|test123456',
   'test@owlby.com',
   'Test Student',
-  3,
-  ARRAY['space', 'math', 'animals'],
-  'parent@owlby.com'
-) ON CONFLICT (auth0_id) DO NOTHING;  -- Avoid duplicates if script is run multiple times
+  10,
+  4,
+  ARRAY['space', 'animals', 'math', 'science'],
+  'parent@owlby.com',
+  true,
+  true
+) ON CONFLICT (auth0_id) DO UPDATE SET
+  updated_at = NOW(),
+  last_login_at = NOW();
 
 -- Insert a test feedback entry to verify the tables work together
 INSERT INTO feedback (
@@ -173,7 +273,7 @@ INSERT INTO feedback (
   'general',
   'other',
   5,
-  'Test feedback submission - database schema created successfully!',
+  'Test feedback submission - enhanced database schema created successfully!',
   'child',
   'ios',
   '1.0.0',
@@ -184,26 +284,27 @@ INSERT INTO feedback (
 -- VERIFICATION QUERIES
 -- ===============================
 
--- Verify the users table was created correctly
-SELECT 'Users table verification:' as status;
-SELECT auth0_id, email, name, grade_level, array_length(interests, 1) as interest_count
+-- Verify the enhanced users table was created correctly
+SELECT 'Enhanced Users table verification:' as status;
+SELECT 
+  auth0_id, 
+  email, 
+  name, 
+  age,
+  grade_level, 
+  array_length(interests, 1) as interest_count,
+  jsonb_array_length(achievements) as achievement_count,
+  onboarding_completed,
+  profile_completed
 FROM users WHERE auth0_id = 'auth0|test123456';
 
 -- Verify the feedback table relationship works
 SELECT 'Feedback-User relationship verification:' as status;
-SELECT f.feedback_type, f.overall_rating, u.name as user_name, u.grade_level
+SELECT f.feedback_type, f.overall_rating, u.name as user_name, u.grade_level, u.age
 FROM feedback f 
 LEFT JOIN users u ON f.user_id = u.auth0_id 
 WHERE f.user_id = 'auth0|test123456'
 LIMIT 1;
 
--- Show table structure summary
-SELECT 'Database schema summary:' as status;
-SELECT 
-  schemaname,
-  tablename,
-  (SELECT count(*) FROM information_schema.columns WHERE table_name = tablename) as column_count
-FROM pg_tables 
-WHERE schemaname = 'public' 
-AND tablename IN ('users', 'feedback')
-ORDER BY tablename; 
+-- Show enhanced table structure summary
+SELECT 'Enhanced table structure created successfully!' as status; 
