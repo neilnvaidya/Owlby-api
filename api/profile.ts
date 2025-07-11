@@ -136,6 +136,8 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
 async function updateProfile(auth0UserId: string, decoded: any, updateData: ProfileUpdateRequest, res: VercelResponse) {
   try {
     console.log('Updating profile for user:', auth0UserId, 'with data:', Object.keys(updateData));
+    console.log('📧 Received email in updateData:', updateData.email);
+    console.log('📧 Decoded email from JWT:', decoded.email);
     
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
@@ -154,6 +156,10 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     
     // Basic fields
     if (updateData.name) validatedData.name = String(updateData.name).slice(0, 100);
+    if (updateData.email) {
+      validatedData.email = String(updateData.email).slice(0, 255);
+      console.log('📧 Email from onboarding data:', updateData.email);
+    }
     if (updateData.parent_email) validatedData.parent_email = String(updateData.parent_email).slice(0, 255);
     if (typeof updateData.age === 'number') validatedData.age = Math.min(Math.max(5, updateData.age), 18);
     if (typeof updateData.grade_level === 'number') validatedData.grade_level = Math.min(Math.max(0, updateData.grade_level), 12);
@@ -222,11 +228,12 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     } else {
       console.log('Creating new user');
       // Insert new user
+      console.log('📧 Creating new user with email:', validatedData.email || decoded.email || '');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
           auth0_id: auth0UserId,
-          email: decoded.email || '',
+          email: validatedData.email || decoded.email || '',
           avatar_url: decoded.picture || null,
           ...validatedData,
           created_at: new Date().toISOString(),

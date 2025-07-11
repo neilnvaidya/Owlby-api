@@ -218,6 +218,7 @@ export const createMockUserProfile = (auth0_id: string, email: string, name: str
 // Type for profile update requests
 export interface ProfileUpdateRequest {
   name?: string;
+  email?: string;
   age?: number;
   grade_level?: number;
   interests?: string[];
