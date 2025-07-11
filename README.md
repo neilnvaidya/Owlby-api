@@ -1,48 +1,65 @@
 # Owlby API
 
-This is the backend API for the OwlbyAI platform, providing secure, AI-powered chat and user profile management for the mobile app. Developed by OwlbyAI LLP.
+This repository contains the backend API for the OwlbyAI learning platform, developed by OwlbyAI LLP. It is a Node.js application designed to be deployed as serverless functions on Vercel.
 
-## MVP Endpoints
-- **POST /api/chat/response** — AI-powered chat response and lesson generation
-- **GET /api/profile** — Fetch user profile (Auth0 authenticated)
-- **POST /api/profile** — Update user profile (Auth0 authenticated)
-- **Auth0 integration** — Secure authentication for all endpoints
+## Purpose
 
-For business vision and roadmap, see [../PRODUCT_VISION.md](../PRODUCT_VISION.md).
+This API serves as the backend for the `Owlby-app` mobile application. Its primary responsibilities include:
+- Handling user profile creation and updates.
+- Processing chat messages and generating AI-powered responses.
+- Generating dynamic lessons and quizzes based on user interactions.
+- Securely authenticating and authorizing all incoming requests.
 
 ## Project Structure
-- **/api/** — Serverless API endpoints (chat, profile, auth)
-- **/lib/** — Shared library code and utilities
-- **/test/** — API tests
 
-## Setup & Development
-1. Install dependencies:
-   ```sh
-   npm install
-   ```
-2. Set up your `.env` file:
-   ```env
-   GEMINI_API_KEY=YOUR_GEMINI_API_KEY
-   AUTH0_DOMAIN=YOUR_AUTH0_DOMAIN
-   AUTH0_CLIENT_ID=YOUR_AUTH0_CLIENT_ID
-   AUTH0_CLIENT_SECRET=YOUR_AUTH0_CLIENT_SECRET
-   ```
-3. Run locally (if supported):
-   ```sh
-   npm run dev
-   ```
-4. Deploy to Vercel for production.
+- **/api/**: Contains all the serverless function endpoints, organized by feature.
+- **/lib/**: Shared libraries, utility functions, and type definitions (e.g., Supabase client, auth helpers).
+- **/test/**: API integration and unit tests.
 
-## Codebase Inventory
-- **api/chat/response.ts** — Chat and lesson generation endpoint
-- **api/profile.ts** — User profile endpoints
-- **api/health.ts** — Health check endpoint
-- **lib/** — Shared utilities and Gemini AI integration
-- **test/** — API tests
+## API Endpoints
 
-## Notes
-- All non-MVP endpoints and features have been removed for focus and clarity.
-- For mobile app and web landing page setup, see their respective READMEs.
+The following are the core API endpoints:
 
----
-For business and product direction, see [../PRODUCT_VISION.md](../PRODUCT_VISION.md). 
+- `POST /api/chat/generate-response`: Powers the conversational learning feature.
+- `GET /api/profile`: Retrieves a user's profile data.
+- `POST /api/profile`: Creates or updates a user's profile.
+- `DELETE /api/delete-account`: Handles user account deletion requests.
+- `POST /api/feedback/submit`: Collects user feedback.
+- `GET /api/health`: A simple health check endpoint.
+
+All endpoints are secured and require a valid authentication token.
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (LTS version)
+- Yarn or npm
+- A Vercel account for deployment.
+- A Supabase project for the database.
+- An `.env` file with the necessary environment variables (see `.env.example`).
+
+### Installation & Development
+
+1.  **Clone the repository:**
+    ```sh
+    git clone <repository-url>
+    cd Owlby-api
+    ```
+
+2.  **Install dependencies:**
+    ```sh
+    npm install
+    ```
+
+3.  **Set up environment variables:**
+    Create a `.env` file and populate it with your keys for the database, AI model, and authentication provider.
+
+4.  **Run the development server:**
+    ```sh
+    npm run dev
+    ```
+
+## Deployment
+
+This API is designed for and deployed on Vercel. Every push to the `main` branch will automatically trigger a new production deployment. Ensure that all necessary environment variables are also configured in the Vercel project settings. 

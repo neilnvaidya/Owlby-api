@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/health",
+      "destination": "/api/health"
+    },
+    {
       "source": "/verify-email",
       "destination": "/api/verify-email"
     },

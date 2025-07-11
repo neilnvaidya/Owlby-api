@@ -136,7 +136,7 @@ async function updateOnboardingProfile(
       console.info('✅ User profile updated successfully with onboarding data');
       
       // Return updated profile
-      const profile: UserProfile = {
+      const profile = {
         user_id: auth0UserId,
         name: updatedUser.name || '',
         email: decoded.email || '',
@@ -180,7 +180,7 @@ async function updateOnboardingProfile(
       console.info('✅ New user created successfully with onboarding data');
       
       // Return new profile
-      const profile: UserProfile = {
+      const profile = {
         user_id: auth0UserId,
         name: newUser.name || '',
         email: decoded.email || '',
