@@ -13,8 +13,12 @@
       "destination": "/api/update-profile"
     },
     {
+      "source": "/profile",
+      "destination": "/api/profile"
+    },
+    {
       "source": "/learn/lesson",
-      "destination": "/api/learn/lesson"
+      "destination": "/api/learn/generate-lesson"
     },
     {
       "source": "/learn/generate-lesson",
@@ -22,7 +26,7 @@
     },
     {
       "source": "/chat/response",
-      "destination": "/api/chat/response"
+      "destination": "/api/chat/generate-response"
     },
     {
       "source": "/chat/generate-response",
