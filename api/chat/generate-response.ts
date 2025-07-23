@@ -207,10 +207,20 @@ export default async function handler(req: any, res: any) {
   }
 
   const { message, chatId, gradeLevel = 3, userId } = req.body;
-  const model = 'gemini-1.5-flash';
+  const model = 'gemini-2.5-flash';
     
     if (!message || !chatId) {
       console.info('❌ Missing message or chatId');
+      logChatCall({
+        userId,
+        chatId: chatId || 'unknown',
+        gradeLevel,
+        message: message || '',
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: 'BadRequest',
+        model,
+      });
       return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
     }
 
@@ -303,7 +313,7 @@ export default async function handler(req: any, res: any) {
       message: message || '',
       responseTimeMs: Date.now() - startTime,
       success: false,
-      error: error.name || 'UnknownApiError',
+      error: error.message || 'UnknownApiError',
       model,
     });
     return res.status(500).json({ 

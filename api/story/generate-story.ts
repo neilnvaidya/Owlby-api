@@ -164,6 +164,15 @@ export default async function handler(req: any, res: any) {
     
     if (!prompt) {
       console.info('❌ Missing story prompt');
+      logStoryCall({
+        userId,
+        gradeLevel,
+        prompt: prompt || 'unknown',
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: 'BadRequest',
+        model,
+      });
       return res.status(400).json({ error: "Story prompt is required." });
     }
 
@@ -223,7 +232,7 @@ export default async function handler(req: any, res: any) {
       prompt,
       responseTimeMs: Date.now() - startTime,
       success: false,
-      error: error.name || 'UnknownError',
+      error: error.message || 'UnknownError',
       model,
     });
     

@@ -217,6 +217,15 @@ export default async function handler(req: any, res: any) {
     
     if (!topic) {
       console.info('❌ Missing topic');
+      logLessonCall({
+        userId,
+        gradeLevel,
+        topic: topic || 'unknown',
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: 'BadRequest',
+        model,
+      });
       return res.status(400).json({ error: "Topic is required." });
     }
 
@@ -274,7 +283,7 @@ export default async function handler(req: any, res: any) {
       topic,
       responseTimeMs: Date.now() - startTime,
       success: false,
-      error: error.name || 'UnknownError',
+      error: error.message || 'UnknownError',
       model,
     });
     return res.status(500).json({ 

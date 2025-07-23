@@ -53,8 +53,7 @@ class APILoggingService {
 
   // Gemini pricing per 1M tokens (update as needed)
   private readonly PRICING = {
-    'gemini-1.5-flash': { input: 0.35, output: 1.05 }, // Example pricing, adjust as needed
-    'gemini-pro': { input: 0.50, output: 1.50 }, // Example pricing
+    'gemini-2.5-flash': { input: 0.30, output: 2.50 }
   };
   
   constructor() {
@@ -98,7 +97,7 @@ class APILoggingService {
   }
 
   private calculateCost(inputTokens: number, outputTokens: number, model: keyof typeof this.PRICING): number {
-    const rates = this.PRICING[model] || this.PRICING['gemini-1.5-flash'];
+    const rates = this.PRICING['gemini-2.5-flash'];
     const cost = ((inputTokens / 1_000_000) * rates.input) + ((outputTokens / 1_000_000) * rates.output);
     return cost;
   }
