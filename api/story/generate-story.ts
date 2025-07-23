@@ -5,6 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
+import { logStoryCall } from '../../lib/api-logger';
 
 // Use regular console for API logging
 
@@ -157,18 +158,20 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const startTime = Date.now();
+  const { prompt, gradeLevel = 3, userId } = req.body;
+  const model = 'gemini-pro';
+
+  if (!prompt) {
+    console.info('❌ Missing story prompt');
+    return res.status(400).json({ error: "Story prompt is required." });
+  }
+
   try {
     console.info('📖 Story Generate API: Request received', req.body);
-    const { prompt, gradeLevel = 3 } = req.body;
-    
-    if (!prompt) {
-      console.info('❌ Missing story prompt');
-      return res.status(400).json({ error: "Story prompt is required." });
-    }
     
     // Get the configuration for this story
     const config = getStoryConfig(prompt, gradeLevel);
-    const model = 'gemini-2.0-flash-exp';
     
     // Create the contents array with user input
     const contents = [
@@ -196,6 +199,17 @@ export default async function handler(req: any, res: any) {
     // Process complete response - this will throw if parsing fails
     const processedResponse = processStoryResponse(responseText, prompt, gradeLevel);
 
+    logStoryCall({
+      userId,
+      gradeLevel,
+      prompt,
+      responseText,
+      responseTimeMs: Date.now() - startTime,
+      success: true,
+      usageMetadata: response.usageMetadata,
+      model,
+    });
+
     console.info('✅ Story Generate API: Responding with story for prompt:', prompt);
     
     return res.status(200).json(processedResponse);
@@ -203,6 +217,16 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('❌ Story Generate API: Error occurred', error);
     
+    logStoryCall({
+      userId,
+      gradeLevel,
+      prompt,
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: error.name || 'UnknownError',
+      model,
+    });
+
     if (error.message && error.message.includes('User location is not supported')) {
       return res.status(503).json({ 
         error: 'Story generation not available in your region',

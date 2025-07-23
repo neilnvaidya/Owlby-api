@@ -5,6 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
+import { logLessonCall } from '../../lib/api-logger';
 
 // Use regular console for API logging
 
@@ -210,18 +211,20 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const startTime = Date.now();
+  const { topic, gradeLevel = 3, userId } = req.body;
+  const model = 'gemini-pro';
+
+  if (!topic) {
+    console.info('❌ Missing topic');
+    return res.status(400).json({ error: "Topic is required." });
+  }
+
   try {
     console.info('📚 Lesson Generate API: Request received', req.body);
-    const { topic, gradeLevel = 3 } = req.body;
-    
-    if (!topic) {
-      console.info('❌ Missing topic');
-      return res.status(400).json({ error: "Topic is required." });
-    }
     
     // Get the configuration for this lesson
     const config = getLessonConfig(topic, gradeLevel);
-    const model = 'gemini-2.0-flash-exp';
     
     // Create the contents array with user input
     const contents = [
@@ -234,8 +237,6 @@ export default async function handler(req: any, res: any) {
         ],
       },
     ];
-
-
     
     console.info('📚 Sending lesson request to Gemini for topic:', topic);
     const response = await ai.models.generateContent({
@@ -251,11 +252,31 @@ export default async function handler(req: any, res: any) {
     // Process complete response - this will throw if parsing fails
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
 
+    logLessonCall({
+      userId,
+      gradeLevel,
+      topic,
+      responseText,
+      responseTimeMs: Date.now() - startTime,
+      success: true,
+      usageMetadata: response.usageMetadata,
+      model,
+    });
+
     console.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
     
     return res.status(200).json(processedResponse);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Lesson Generate API Error:', error);
+    logLessonCall({
+      userId,
+      gradeLevel,
+      topic,
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: error.name || 'UnknownError',
+      model,
+    });
     return res.status(500).json({ 
       error: 'An unexpected error occurred while generating the lesson.',
       topic: req.body?.topic

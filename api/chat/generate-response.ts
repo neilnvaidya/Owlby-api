@@ -5,6 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
+import { logChatCall } from '../../lib/api-logger';
 
 config();
 
@@ -190,6 +191,7 @@ function processResponse(responseText: string, query: string, gradeLevel: number
 }
 
 export default async function handler(req: any, res: any) {
+  const startTime = Date.now();
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -204,18 +206,19 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const { message, chatId, gradeLevel = 3, userId } = req.body;
+  const model = 'gemini-1.5-flash';
+
+  if (!message || !chatId) {
+    console.info('❌ Missing message or chatId');
+    return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
+  }
+
   try {
     console.info('🦉 Chat Generate Response API: Request received', req.body);
-    const { message, chatId, gradeLevel = 3 } = req.body;
-    
-    if (!message || !chatId) {
-      console.info('❌ Missing message or chatId');
-      return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
-    }
     
     // Get the configuration for this chat
     const config = getChatConfig(gradeLevel);
-    const model = 'gemini-2.5-flash';
     
     // Create the contents array with user input
     const contents = [
@@ -229,34 +232,10 @@ export default async function handler(req: any, res: any) {
       },
     ];
     
-    let processedResponse: any = {
-      response_text: {
-        main: "Hoo-hoo! I'm having a little trouble right now. Can you try asking me something else?",
-        follow_up: "What would you like to learn about today?"
-      },
-      interactive_elements: {
-        followup_buttons: [
-          { text: "Animals", prompt: "Tell me about animals!" },
-          { text: "Space", prompt: "What's in space?" },
-          { text: "Science", prompt: "Show me cool science facts!" }
-        ],
-        learn_more: {
-          prompt: "Explore more topics",
-          tags: ["learning", "education", "fun"]
-        },
-        story_button: {
-          title: "Story Time",
-          story_prompt: "Tell me a fun story!"
-        }
-      },
-      content_blocks: {
-        safety_filter: false
-      },
-      chatId,
-      gradeLevel,
-      success: false
-    };
-    
+    let processedResponse: any;
+    let responseText = '';
+    let usageMetadata: any;
+
     try {
       console.info('🦉 Sending message to Gemini:', message);
       const response = await ai.models.generateContent({
@@ -266,27 +245,67 @@ export default async function handler(req: any, res: any) {
       });
       
       console.info('🦉 Gemini raw result received');
-      const responseText = response.text || '';
+      responseText = response.text || '';
+      usageMetadata = response.usageMetadata;
       console.info('🦉 Gemini response text:', responseText.substring(0, 200) + '...');
       
       // Process complete response
       processedResponse = processResponse(responseText, message, gradeLevel, chatId);
+
+      logChatCall({
+        userId,
+        chatId,
+        gradeLevel,
+        message,
+        responseText,
+        responseTimeMs: Date.now() - startTime,
+        success: true,
+        usageMetadata,
+        model,
+      });
+
     } catch (aiError: any) {
       console.error('❌ AI Error:', aiError);
+      logChatCall({
+        userId,
+        chatId,
+        gradeLevel,
+        message,
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: aiError.name || 'UnknownError',
+        model,
+      });
       if (aiError.message && aiError.message.includes('User location is not supported')) {
-        processedResponse.response_text.main =
-          "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?";
+        processedResponse = {
+          response_text: {
+            main: "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?"
+          },
+        };
       } else {
-        processedResponse.response_text.main =
-          "Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?";
+        processedResponse = {
+          response_text: {
+            main: "Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?"
+          },
+        };
       }
     }
 
     console.info('✅ Chat Generate Response API: Responding with success:', processedResponse.success);
     
     return res.status(200).json(processedResponse);
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Chat Generate Response API Error:', error);
+    logChatCall({
+      userId,
+      chatId,
+      gradeLevel,
+      message: message || '',
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: error.name || 'UnknownApiError',
+      model,
+    });
     return res.status(500).json({ 
       error: 'An unexpected error occurred while processing your request.',
       chatId: req.body?.chatId,
