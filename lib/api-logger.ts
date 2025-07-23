@@ -60,9 +60,21 @@ class APILoggingService {
     this.flushTimer = setInterval(() => this.flushToSupabase(), this.FLUSH_INTERVAL);
   }
 
+  async flushNow(): Promise<void> {
+    await this.flushToSupabase();
+  }
+
   async logAPICall(data: APILogData): Promise<void> {
     try {
-      const modelName = data.model as keyof typeof this.PRICING;
+      // Debug: print token metadata
+      console.debug('[API LOGGER] Logging call:', {
+        route: data.route,
+        model: data.model,
+        geminiUsageMetadata: data.geminiUsageMetadata,
+        inputTextLength: data.inputText.length,
+        outputTextLength: data.outputText?.length || 0
+      });
+      const modelName = 'gemini-2.5-flash';
       const entry: LogEntry = {
         timestamp: new Date().toISOString(),
         route: data.route,
@@ -91,7 +103,7 @@ class APILoggingService {
         await this.flushToSupabase();
       }
     } catch (error) {
-      console.error('Failed to log API call:', error);
+      console.error('[API LOGGER] Failed to log API call:', error, data);
       // Logging failures shouldn't break the API
     }
   }
@@ -109,17 +121,17 @@ class APILoggingService {
     this.buffer = [];
 
     try {
-      const { error } = await supabase.from('api_usage_logs').insert(batch);
+      const { error, data } = await supabase.from('api_usage_logs').insert(batch);
 
       if (error) {
-        console.error('Supabase insert error:', error);
+        console.error('[API LOGGER] Supabase insert error:', error, { batch });
         // Re-add to buffer for retry on next flush
         this.buffer.unshift(...batch);
       } else {
         console.info(`📊 Logged ${batch.length} API calls to database`);
       }
     } catch (error) {
-      console.error('Failed to flush logs to Supabase:', error);
+      console.error('[API LOGGER] Failed to flush logs to Supabase:', error, { batch });
       this.buffer.unshift(...batch);
     }
   }
@@ -133,6 +145,7 @@ class APILoggingService {
 }
 
 export const apiLogger = new APILoggingService();
+export const flushApiLogger = () => apiLogger.flushNow();
 
 
 // Route-specific helpers for convenience

@@ -5,7 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
-import { logChatCall } from '../../lib/api-logger';
+import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 config();
 
@@ -221,6 +221,7 @@ export default async function handler(req: any, res: any) {
         error: 'BadRequest',
         model,
       });
+      await flushApiLogger();
       return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
     }
 
@@ -258,7 +259,13 @@ export default async function handler(req: any, res: any) {
       responseText = response.text || '';
       usageMetadata = response.usageMetadata;
       console.info('🦉 Gemini response text:', responseText.substring(0, 200) + '...');
-      
+      // Debug: print token metadata
+      console.debug('[CHAT API] Logging tokens:', {
+        promptTokenCount: usageMetadata?.promptTokenCount,
+        candidatesTokenCount: usageMetadata?.candidatesTokenCount,
+        totalTokenCount: usageMetadata?.totalTokenCount,
+        usageMetadata
+      });
       // Process complete response
       processedResponse = processResponse(responseText, message, gradeLevel, chatId);
 
@@ -273,9 +280,11 @@ export default async function handler(req: any, res: any) {
         usageMetadata,
         model,
       });
+      await flushApiLogger();
 
     } catch (aiError: any) {
       console.error('❌ AI Error:', aiError);
+      console.debug('[CHAT API] Logging tokens (error):', { usageMetadata });
       logChatCall({
         userId,
         chatId,
@@ -286,6 +295,7 @@ export default async function handler(req: any, res: any) {
         error: aiError.name || 'UnknownError',
         model,
       });
+      await flushApiLogger();
       if (aiError.message && aiError.message.includes('User location is not supported')) {
         processedResponse = {
           response_text: {
@@ -302,7 +312,7 @@ export default async function handler(req: any, res: any) {
     }
 
     console.info('✅ Chat Generate Response API: Responding with success:', processedResponse.success);
-    
+    await flushApiLogger();
     return res.status(200).json(processedResponse);
   } catch (error: any) {
     console.error('❌ Chat Generate Response API Error:', error);
@@ -316,6 +326,7 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownApiError',
       model,
     });
+    await flushApiLogger();
     return res.status(500).json({ 
       error: 'An unexpected error occurred while processing your request.',
       chatId: req.body?.chatId,

@@ -5,7 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
-import { logStoryCall } from '../../lib/api-logger';
+import { logStoryCall, flushApiLogger } from '../../lib/api-logger';
 
 // Use regular console for API logging
 
@@ -173,6 +173,7 @@ export default async function handler(req: any, res: any) {
         error: 'BadRequest',
         model,
       });
+      await flushApiLogger();
       return res.status(400).json({ error: "Story prompt is required." });
     }
 
@@ -204,7 +205,13 @@ export default async function handler(req: any, res: any) {
     console.info('📖 Gemini raw result received');
     const responseText = response.text || '';
     console.info('📖 Gemini response text:', responseText.substring(0, 200) + '...');
-    
+    // Debug: print token metadata
+    console.debug('[STORY API] Logging tokens:', {
+      promptTokenCount: response.usageMetadata?.promptTokenCount,
+      candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+      totalTokenCount: response.usageMetadata?.totalTokenCount,
+      usageMetadata: response.usageMetadata
+    });
     // Process complete response - this will throw if parsing fails
     const processedResponse = processStoryResponse(responseText, prompt, gradeLevel);
 
@@ -218,6 +225,7 @@ export default async function handler(req: any, res: any) {
       usageMetadata: response.usageMetadata,
       model,
     });
+    await flushApiLogger();
 
     console.info('✅ Story Generate API: Responding with story for prompt:', prompt);
     
@@ -225,7 +233,6 @@ export default async function handler(req: any, res: any) {
     
   } catch (error: any) {
     console.error('❌ Story Generate API: Error occurred', error);
-    
     logStoryCall({
       userId,
       gradeLevel,
@@ -235,7 +242,7 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownError',
       model,
     });
-    
+    await flushApiLogger();
     if (error.message && error.message.includes('User location is not supported')) {
       return res.status(503).json({ 
         error: 'Story generation not available in your region',

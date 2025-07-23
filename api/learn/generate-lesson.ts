@@ -5,7 +5,7 @@ import {
   HarmCategory,
   Type,
 } from '@google/genai';
-import { logLessonCall } from '../../lib/api-logger';
+import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
 
 // Use regular console for API logging
 
@@ -226,6 +226,7 @@ export default async function handler(req: any, res: any) {
         error: 'BadRequest',
         model,
       });
+      await flushApiLogger();
       return res.status(400).json({ error: "Topic is required." });
     }
 
@@ -257,7 +258,13 @@ export default async function handler(req: any, res: any) {
     console.info('📚 Gemini raw result received');
     const responseText = response.text || '';
     console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
-    
+    // Debug: print token metadata
+    console.debug('[LEARN API] Logging tokens:', {
+      promptTokenCount: response.usageMetadata?.promptTokenCount,
+      candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+      totalTokenCount: response.usageMetadata?.totalTokenCount,
+      usageMetadata: response.usageMetadata
+    });
     // Process complete response - this will throw if parsing fails
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
 
@@ -271,6 +278,7 @@ export default async function handler(req: any, res: any) {
       usageMetadata: response.usageMetadata,
       model,
     });
+    await flushApiLogger();
 
     console.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
     
@@ -286,6 +294,7 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownError',
       model,
     });
+    await flushApiLogger();
     return res.status(500).json({ 
       error: 'An unexpected error occurred while generating the lesson.',
       topic: req.body?.topic
