@@ -160,12 +160,12 @@ export default async function handler(req: any, res: any) {
 
   const startTime = Date.now();
   const { prompt, gradeLevel = 3, userId } = req.body;
-  const model = 'gemini-pro';
-
-  if (!prompt) {
-    console.info('❌ Missing story prompt');
-    return res.status(400).json({ error: "Story prompt is required." });
-  }
+  const model = 'gemini-2.5-flash';
+    
+    if (!prompt) {
+      console.info('❌ Missing story prompt');
+      return res.status(400).json({ error: "Story prompt is required." });
+    }
 
   try {
     console.info('📖 Story Generate API: Request received', req.body);
@@ -226,7 +226,7 @@ export default async function handler(req: any, res: any) {
       error: error.name || 'UnknownError',
       model,
     });
-
+    
     if (error.message && error.message.includes('User location is not supported')) {
       return res.status(503).json({ 
         error: 'Story generation not available in your region',

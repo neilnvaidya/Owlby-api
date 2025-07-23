@@ -213,12 +213,12 @@ export default async function handler(req: any, res: any) {
 
   const startTime = Date.now();
   const { topic, gradeLevel = 3, userId } = req.body;
-  const model = 'gemini-pro';
-
-  if (!topic) {
-    console.info('❌ Missing topic');
-    return res.status(400).json({ error: "Topic is required." });
-  }
+  const model = 'gemini-2.5-flash';
+    
+    if (!topic) {
+      console.info('❌ Missing topic');
+      return res.status(400).json({ error: "Topic is required." });
+    }
 
   try {
     console.info('📚 Lesson Generate API: Request received', req.body);

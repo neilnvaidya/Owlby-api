@@ -208,11 +208,11 @@ export default async function handler(req: any, res: any) {
 
   const { message, chatId, gradeLevel = 3, userId } = req.body;
   const model = 'gemini-1.5-flash';
-
-  if (!message || !chatId) {
-    console.info('❌ Missing message or chatId');
-    return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
-  }
+    
+    if (!message || !chatId) {
+      console.info('❌ Missing message or chatId');
+      return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
+    }
 
   try {
     console.info('🦉 Chat Generate Response API: Request received', req.body);
@@ -235,7 +235,7 @@ export default async function handler(req: any, res: any) {
     let processedResponse: any;
     let responseText = '';
     let usageMetadata: any;
-
+    
     try {
       console.info('🦉 Sending message to Gemini:', message);
       const response = await ai.models.generateContent({
