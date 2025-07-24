@@ -7,6 +7,7 @@ import {
 } from '@google/genai';
 import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 import { buildSystemInstructions } from './sessionPromptBuilder';
+import { chatResponseSchema } from './chatSchema';
 
 config();
 
@@ -46,60 +47,7 @@ const getChatConfig = (gradeLevel: number) => {
       },
     ],
     responseMimeType: 'application/json',
-    responseSchema: {
-      type: Type.OBJECT,
-      required: ["response_text", "interactive_elements", "session_delta"],
-      properties: {
-        response_text: {
-          type: Type.OBJECT,
-          required: ["main", "follow_up"],
-          properties: {
-            main: { type: Type.STRING },
-            follow_up: { type: Type.STRING }
-          }
-        },
-        interactive_elements: {
-          type: Type.OBJECT,
-          required: ["followup_buttons"],
-          properties: {
-            followup_buttons: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                required: ["text", "prompt"],
-                properties: {
-                  text: { type: Type.STRING },
-                  prompt: { type: Type.STRING }
-                }
-              }
-            },
-            story_button: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                story_prompt: { type: Type.STRING }
-              }
-            },
-            learn_more: {
-              type: Type.OBJECT,
-              properties: {
-                prompt: { type: Type.STRING },
-                tags: { type: Type.ARRAY, items: { type: Type.STRING } }
-              }
-            }
-          }
-        },
-        session_delta: {
-          type: Type.OBJECT,
-          properties: {
-            pedagogy_flags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            topic_updates: { type: Type.OBJECT, properties: { current_topic: { type: Type.STRING } } },
-            learning_analysis: { type: Type.OBJECT, properties: { comprehension_level: { type: Type.STRING } } },
-            engagement_analysis: { type: Type.OBJECT, properties: { engagement_change: { type: Type.STRING } } }
-          }
-        }
-      }
-    },
+    responseSchema: chatResponseSchema,
     // systemInstruction will be injected dynamically
     systemInstruction: [] as any[],
   };
