@@ -248,7 +248,7 @@ export default async function handler(req: any, res: any) {
     let usageMetadata: any;
 
     try {
-      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage);
+      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage, config.systemInstruction);
       const response = await ai.models.generateContent({
         model,
         config,
