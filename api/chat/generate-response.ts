@@ -6,6 +6,7 @@ import {
   Type,
 } from '@google/genai';
 import { logChatCall, flushApiLogger } from '../../lib/api-logger';
+import { buildSystemInstructions } from './sessionPromptBuilder';
 
 config();
 
@@ -118,9 +119,6 @@ Never provide content unsuitable for children. Always keep your responses concis
   };
 };
 
-// In-memory chat sessions (replace with persistent storage for production)
-const chatSessions = new Map<string, any>();
-
 /**
  * Process the JSON response from Owlby
  * @param responseText The raw response from Gemini (should be JSON)
@@ -206,55 +204,74 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { message, chatId, gradeLevel = 3, userId } = req.body;
+  // Accept new payload: { messages, chatId, gradeLevel, userId, sessionMemory }
+  const { messages, chatId, gradeLevel = 3, userId, sessionMemory } = req.body;
   const model = 'gemini-2.5-flash';
-    
-    if (!message || !chatId) {
-      console.info('❌ Missing message or chatId');
-      logChatCall({
-        userId,
-        chatId: chatId || 'unknown',
-        gradeLevel,
-        message: message || '',
-        responseTimeMs: Date.now() - startTime,
-        success: false,
-        error: 'BadRequest',
-        model,
-      });
-      await flushApiLogger();
-      return res.status(400).json({ error: "Both 'message' and 'chatId' are required." });
-    }
+
+  if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
+    console.info('❌ Missing messages array or chatId');
+    logChatCall({
+      userId,
+      chatId: chatId || 'unknown',
+      gradeLevel,
+      message: '[multi-turn]',
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: 'BadRequest',
+      model,
+    });
+    await flushApiLogger();
+    return res.status(400).json({ error: "'messages' (array) and 'chatId' are required." });
+  }
 
   try {
     console.info('🦉 Chat Generate Response API: Request received', req.body);
-    
+
     // Get the configuration for this chat
     const config = getChatConfig(gradeLevel);
-    
-    // Create the contents array with user input
+
+    // Build the system instructions using the new utility
+    const systemInstructions = buildSystemInstructions({
+      sessionMemory,
+      gradeLevel,
+      messages,
+    });
+
+    // The user prompt is the last user message
+    const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
+
+    // Create the contents array for the AI model
     const contents = [
       {
         role: 'user',
         parts: [
           {
-            text: message,
+            text: lastUserMessage,
+          },
+        ],
+      },
+      {
+        role: 'system',
+        parts: [
+          {
+            text: systemInstructions,
           },
         ],
       },
     ];
-    
+
     let processedResponse: any;
     let responseText = '';
     let usageMetadata: any;
-    
+
     try {
-      console.info('🦉 Sending message to Gemini:', message);
+      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage.substring(0, 200) + '...');
       const response = await ai.models.generateContent({
         model,
         config,
         contents,
       });
-      
+
       console.info('🦉 Gemini raw result received');
       responseText = response.text || '';
       usageMetadata = response.usageMetadata;
@@ -267,13 +284,13 @@ export default async function handler(req: any, res: any) {
         usageMetadata
       });
       // Process complete response
-      processedResponse = processResponse(responseText, message, gradeLevel, chatId);
+      processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
 
       logChatCall({
         userId,
         chatId,
         gradeLevel,
-        message,
+        message: '[multi-turn]',
         responseText,
         responseTimeMs: Date.now() - startTime,
         success: true,
@@ -289,7 +306,7 @@ export default async function handler(req: any, res: any) {
         userId,
         chatId,
         gradeLevel,
-        message,
+        message: '[multi-turn]',
         responseTimeMs: Date.now() - startTime,
         success: false,
         error: aiError.name || 'UnknownError',
@@ -320,7 +337,7 @@ export default async function handler(req: any, res: any) {
       userId,
       chatId,
       gradeLevel,
-      message: message || '',
+      message: '[multi-turn]',
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownApiError',
