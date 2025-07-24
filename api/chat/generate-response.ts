@@ -92,10 +92,10 @@ const getChatConfig = (gradeLevel: number) => {
         session_delta: {
           type: Type.OBJECT,
           properties: {
-            topic_updates: { type: Type.OBJECT },
-            learning_analysis: { type: Type.OBJECT },
-            engagement_analysis: { type: Type.OBJECT },
-            pedagogy_flags: { type: Type.ARRAY, items: { type: Type.STRING } }
+            pedagogy_flags: { type: Type.ARRAY, items: { type: Type.STRING } },
+            topic_updates: { type: Type.OBJECT, properties: { current_topic: { type: Type.STRING } } },
+            learning_analysis: { type: Type.OBJECT, properties: { comprehension_level: { type: Type.STRING } } },
+            engagement_analysis: { type: Type.OBJECT, properties: { engagement_change: { type: Type.STRING } } }
           }
         }
       }
