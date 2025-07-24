@@ -260,7 +260,7 @@ export default async function handler(req: any, res: any) {
     let usageMetadata: any;
 
     try {
-      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage.substring(0, 200) + '...');
+      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage);
       const response = await ai.models.generateContent({
         model,
         config,
@@ -270,7 +270,7 @@ export default async function handler(req: any, res: any) {
       console.info('🦉 Gemini raw result received');
       responseText = response.text || '';
       usageMetadata = response.usageMetadata;
-      console.info('🦉 Gemini response text:', responseText.substring(0, 200) + '...');
+      console.info('🦉 Gemini response text:', responseText);
       // Debug: print token metadata
       console.debug('[CHAT API] Logging tokens:', {
         promptTokenCount: usageMetadata?.promptTokenCount,
