@@ -237,24 +237,19 @@ export default async function handler(req: any, res: any) {
       messages,
     });
 
+    // Inject system instructions into config (as per GenAI best practice)
+    config.systemInstruction = [ { text: systemInstructions } ];
+
     // The user prompt is the last user message
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
 
-    // Create the contents array for the AI model
+    // Create the contents array for the AI model (only user role)
     const contents = [
       {
         role: 'user',
         parts: [
           {
             text: lastUserMessage,
-          },
-        ],
-      },
-      {
-        role: 'system',
-        parts: [
-          {
-            text: systemInstructions,
           },
         ],
       },
