@@ -207,6 +207,16 @@ export default async function handler(req: any, res: any) {
 
       aiDurationMs = Date.now() - aiStart;
       console.info(`🦉 [chat] ← Gemini (${aiDurationMs}ms)`);
+      // Prefer the convenience .text helper; fall back to raw candidate parts if empty
+      responseText = response.text || (
+        Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
+          ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
+          : ''
+      );
+      if (!responseText) {
+        console.warn('[chat] Gemini returned empty text – full response follows');
+        console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
+      }
       console.debug('🦉 Gemini response text (truncated):', responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
       // Debug: print token metadata
       console.debug('[CHAT API] Logging tokens:', {
