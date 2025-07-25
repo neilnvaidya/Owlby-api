@@ -86,8 +86,8 @@ function processOwlbyResponse(responseText: string) {
         },
         interactive_elements: {
           followup_buttons: [
-            { text: "Tell me more!", prompt: "Can you tell me more about this topic?" },
-            { text: "Something new", prompt: "Can you teach me something completely different?" }
+            "Tell me more!",
+            "Something new"
           ],
           learn_more: {
             prompt: "Explore this topic further",
@@ -124,6 +124,7 @@ function processResponse(responseText: string, query: string, gradeLevel: number
 
 export default async function handler(req: any, res: any) {
   const startTime = Date.now();
+  let aiDurationMs = 0;
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -161,14 +162,14 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.info('🦉 Chat Generate Response API: Request received', req.body);
+    const previewMsg = messages && messages.length > 0 ? (messages[0].text?.slice(0, 60) + (messages[0].text?.length > 60 ? '…' : '')) : '';
+    console.info(`🦉 [chat] req chatId=${chatId} turns=${messages?.length ?? 0} firstPrompt="${previewMsg}"`);
 
     // Get the configuration for this chat
     const config = getChatConfig(gradeLevel);
 
     // Build the system instructions using the new utility
     const systemInstructions = buildSystemInstructions({
-      sessionMemory,
       gradeLevel,
       messages,
     });
@@ -196,17 +197,17 @@ export default async function handler(req: any, res: any) {
     let usageMetadata: any;
 
     try {
-      console.info('🦉 Sending user prompt and system instructions to Gemini:', lastUserMessage, config.systemInstruction);
+      const aiStart = Date.now();
+      console.info(`🦉 [chat] → Gemini: prompt len=${lastUserMessage.length}`);
       const response = await ai.models.generateContent({
         model,
         config,
         contents,
       });
 
-      console.info('🦉 Gemini raw result received');
-      responseText = response.text || '';
-      usageMetadata = response.usageMetadata;
-      console.info('🦉 Gemini response text:', responseText);
+      aiDurationMs = Date.now() - aiStart;
+      console.info(`🦉 [chat] ← Gemini (${aiDurationMs}ms)`);
+      console.debug('🦉 Gemini response text (truncated):', responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
       // Debug: print token metadata
       console.debug('[CHAT API] Logging tokens:', {
         promptTokenCount: usageMetadata?.promptTokenCount,
@@ -263,7 +264,8 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    console.info('✅ Chat Generate Response API: Responding with success:', processedResponse.success);
+    const totalMs = Date.now() - startTime;
+    console.info(`✅ [chat] done chatId=${chatId} ok=${processedResponse?.success ?? true} total=${totalMs}ms (AI ${aiDurationMs}ms)`);
     if (ENABLE_API_LOGGING) {
       await flushApiLogger();
     }
