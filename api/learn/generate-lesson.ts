@@ -70,6 +70,8 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
                 }
               }
             },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+            difficulty: { type: Type.INTEGER },
             quickQuiz: {
               type: Type.ARRAY,
               items: {
@@ -94,13 +96,16 @@ Create a lesson about "${topic}" for grade ${gradeLevel} (approx. ${ageYears} y/
 Sections:
 1. title – ≤50 chars, catchy, no quotes
 2. introduction – ONE clear sentence that hooks interest
-3. body – 1–3 short paragraphs (array of strings)
+3. body – 1–4 short paragraphs, 100 - 250 characters each, scaling with user profile (array of strings)
 4. conclusion – single wrap-up sentence
-5. keyPoints – 3–5 bullet strings
-6. keywords – up to 5 {term, definition} items (hard words only)
-7. quickQuiz – 3–5 MCQs; ALWAYS 4 options; answers are fact recall from lesson; DO NOT add explanations.
+5. keyPoints – 2–5 bullet strings
+6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
+7. tags – 2-8 lowercase single-word strings (e.g., space, biology)
+8. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
+9. quickQuiz – 3–5 MCQs; ALWAYS 4 options; answers in lesson; no explanations.
 
-Formatting rules: plain JSON values, \n allowed inside strings for paragraphs, no markdown bolding.
+Use learner profile: { ageYears: ${ageYears}, gradeLevel: ${gradeLevel} }.
+
 Return ONLY the JSON.`
       }
     ],
@@ -132,7 +137,9 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         keywords: lesson.keywords || [],
         quickQuiz: {
           questions: lesson.quickQuiz || []
-        }
+        },
+        tags: lesson.tags || [],
+        difficulty: lesson.difficulty ?? 10,
       };
     } else {
       throw new Error('Invalid lesson JSON structure');
