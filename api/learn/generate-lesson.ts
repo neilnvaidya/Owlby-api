@@ -52,36 +52,23 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
       properties: {
         lesson: {
           type: Type.OBJECT,
-          required: ["title", "introduction", "keyPoints", "keywords", "quickQuiz"],
+          required: ["title", "introduction", "body", "conclusion", "keyPoints", "keywords", "quickQuiz"],
           properties: {
-            title: {
-              type: Type.STRING,
-            },
-            introduction: {
-              type: Type.STRING,
-              description: "2-3 sentences with line breaks (\\n) for readability",
-            },
-            keyPoints: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.STRING,
-                description: "Bullet points using **bold** for key terms",
-              },
-            },
+            title: { type: Type.STRING },
+            introduction: { type: Type.STRING },
+            body: { type: Type.ARRAY, items: { type: Type.STRING } },
+            conclusion: { type: Type.STRING },
+            keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
             keywords: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
                 required: ["term", "definition"],
                 properties: {
-                  term: {
-                    type: Type.STRING,
-                  },
-                  definition: {
-                    type: Type.STRING,
-                  },
-                },
-              },
+                  term: { type: Type.STRING },
+                  definition: { type: Type.STRING }
+                }
+              }
             },
             quickQuiz: {
               type: Type.ARRAY,
@@ -89,71 +76,32 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
                 type: Type.OBJECT,
                 required: ["question", "options", "correctAnswerIndex"],
                 properties: {
-                  question: {
-                    type: Type.STRING,
-                  },
-                  options: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.STRING,
-                    },
-                  },
-                  correctAnswerIndex: {
-                    type: Type.INTEGER,
-                  },
-                },
-              },
-            },
-            extendedQuiz: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                required: ["question", "options", "correctAnswerIndex", "explanation"],
-                properties: {
-                  question: {
-                    type: Type.STRING,
-                  },
-                  options: {
-                    type: Type.ARRAY,
-                    items: {
-                      type: Type.STRING,
-                    },
-                  },
-                  correctAnswerIndex: {
-                    type: Type.INTEGER,
-                  },
-                  explanation: {
-                    type: Type.STRING,
-                  },
-                },
-              },
-            },
-
-          },
-        },
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  correctAnswerIndex: { type: Type.INTEGER }
+                }
+              }
+            }
+          }
+        }
       },
     },
     systemInstruction: [
       {
-        text: `Create a lesson about "${topic}" for grade ${gradeLevel} (${ageYears} years old). 
+        text: `You are Owlby – a concise, engaging mentor.
+Create a lesson about "${topic}" for grade ${gradeLevel} (approx. ${ageYears} y/o) in VALID JSON matching the provided schema.
 
-Structure response as JSON matching the schema. 
+Sections:
+1. title – ≤50 chars, catchy, no quotes
+2. introduction – ONE clear sentence that hooks interest
+3. body – 1–3 short paragraphs (array of strings)
+4. conclusion – single wrap-up sentence
+5. keyPoints – 3–5 bullet strings
+6. keywords – up to 5 {term, definition} items (hard words only)
+7. quickQuiz – 3–5 MCQs; ALWAYS 4 options; answers are fact recall from lesson; DO NOT add explanations.
 
-Requirements:
-1. **Title**: <50 chars, catchy
-2. **Introduction**: 2-3 sentences with \\n breaks
-3. **Key Points**: 3-5 items using **bold** terms
-4. **Keywords**: Simple definitions
-5. **Quizzes**: 
-   - Quick: 3 basic MCQs
-   - Extended: 2 challenging MCQs with explanations
-
-FORMATTING RULES:
-- Use \\n for line breaks
-- Use **text** for bold formatting (markdown style)
-- Keep all text as plain text with markdown formatting only
-
-You are Owlby, a wise and playful owl teacher. Use "Hoot hoot!" expressions and maintain your friendly, encouraging personality throughout the lesson.`,
+Formatting rules: plain JSON values, \n allowed inside strings for paragraphs, no markdown bolding.
+Return ONLY the JSON.`
       }
     ],
   };
@@ -178,13 +126,12 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         gradeLevel: gradeLevel,
         title: lesson.title,
         introduction: lesson.introduction.replace(/\\n/g, '\n'),
+        body: (lesson.body || []).map((p: string) => p.replace(/\\n/g, '\n')),
+        conclusion: lesson.conclusion,
         keyPoints: lesson.keyPoints || [],
         keywords: lesson.keywords || [],
         quickQuiz: {
           questions: lesson.quickQuiz || []
-        },
-        extendedQuiz: {
-          questions: lesson.extendedQuiz || []
         }
       };
     } else {
