@@ -52,10 +52,7 @@ export interface Lesson {
   introduction: string;
   keyPoints: string[];
   keywords: KeywordDefinition[];
-  quickQuiz: {
-    questions: QuizQuestion[];
-  };
-  extendedQuiz: {
+  challengeQuiz: {
     questions: ExtendedQuizQuestion[];
   };
   diagram: DiagramData | null;
