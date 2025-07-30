@@ -52,7 +52,7 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
       properties: {
         lesson: {
           type: Type.OBJECT,
-          required: ["title", "introduction", "body", "conclusion", "keyPoints", "keywords", "quickQuiz", "challengeQuiz"],
+          required: ["title", "introduction", "body", "conclusion", "keyPoints", "keywords", "challengeQuiz"],
           properties: {
             title: { type: Type.STRING },
             introduction: { type: Type.STRING },
