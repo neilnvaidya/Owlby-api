@@ -136,9 +136,6 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         conclusion: lesson.conclusion,
         keyPoints: lesson.keyPoints || [],
         keywords: lesson.keywords || [],
-        quickQuiz: {
-          questions: lesson.quickQuiz || []
-        },
         challengeQuiz: {
           questions: lesson.challengeQuiz || []
         },
