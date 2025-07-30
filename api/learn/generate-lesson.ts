@@ -72,15 +72,16 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
             },
             tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             difficulty: { type: Type.INTEGER },
-            quickQuiz: {
+            challengeQuiz: {
               type: Type.ARRAY,
               items: {
                 type: Type.OBJECT,
-                required: ["question", "options", "correctAnswerIndex"],
+                required: ["question", "options", "correctAnswerIndex", "explanation"],
                 properties: {
                   question: { type: Type.STRING },
                   options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  correctAnswerIndex: { type: Type.INTEGER }
+                  correctAnswerIndex: { type: Type.INTEGER },
+                  explanation: { type: Type.STRING }
                 }
               }
             }
@@ -102,7 +103,7 @@ Sections:
 6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
 7. tags – 2-8 lowercase single-word strings (e.g., space, biology)
 8. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
-9. quickQuiz – 3–5 MCQs; ALWAYS 4 options; answers in lesson; no explanations.
+9. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
 
 Use learner profile: { ageYears: ${ageYears}, gradeLevel: ${gradeLevel} }.
 
@@ -137,6 +138,9 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         keywords: lesson.keywords || [],
         quickQuiz: {
           questions: lesson.quickQuiz || []
+        },
+        challengeQuiz: {
+          questions: lesson.challengeQuiz || []
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
