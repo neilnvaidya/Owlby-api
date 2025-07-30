@@ -103,7 +103,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       case 'GET':
         return handleGetAchievements(req, res, user.sub);
       case 'POST':
-        return handleSyncAchievements(req, res, user.sub);
+        return handleSyncAchievements(req, res, user.sub, user);
       default:
         return res.status(405).json({ 
           success: false, 
@@ -200,7 +200,7 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
   }
 }
 
-async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, userId: string) {
+async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, userId: string, user: any) {
   try {
     const achievementData = req.body as AchievementData;
 
@@ -245,6 +245,7 @@ async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, u
       .from('users')
       .upsert({
         auth0_id: userId,
+        email: user.email || '', // Include email from JWT token
         achievements: achievementDbData,
         stats: statsDbData,
         last_login_at: new Date().toISOString(),
