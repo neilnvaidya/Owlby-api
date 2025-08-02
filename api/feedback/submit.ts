@@ -126,6 +126,7 @@ export default async function handler(req: any, res: any) {
     // Prepare feedback data for database
     const feedbackData = {
       user_id: is_anonymous ? null : user_id,
+      user_type: 'child',
       feedback_type,
       category: validatedCategory,
       
