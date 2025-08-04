@@ -27,6 +27,9 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
   const ageYears = gradeLevel + 5; // Rough approximation
   
   return {
+    thinkingConfig: {
+      thinkingBudget: 0,
+    },
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
