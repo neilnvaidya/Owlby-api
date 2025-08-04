@@ -199,6 +199,16 @@ export default async function handler(req: any, res: any) {
     try {
       const aiStart = Date.now();
       console.info(`🦉 [chat] → Gemini: prompt len=${lastUserMessage.length}`);
+      
+      // Log input details for cost analysis (dev only)
+      if (process.env.NODE_ENV === 'development') {
+        console.info('🔍 [CHAT] Input prompt analysis:', {
+          user_message_preview: lastUserMessage.substring(0, 200) + (lastUserMessage.length > 200 ? '...' : ''),
+          message_length: lastUserMessage.length,
+          estimated_tokens: Math.ceil(lastUserMessage.length / 4)
+        });
+      }
+      
       const response = await ai.models.generateContent({
         model,
         config,
@@ -220,14 +230,25 @@ export default async function handler(req: any, res: any) {
         console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
       }
       console.debug('🦉 Gemini response text (truncated):', responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
-      // Log token usage metadata
-      console.info('[CHAT API] Tokens used:', {
-        promptTokenCount: usageMetadata?.promptTokenCount,
-        candidatesTokenCount: usageMetadata?.candidatesTokenCount,
-        totalTokenCount: usageMetadata?.totalTokenCount,
-        input_length: lastUserMessage.length,
-        output_length: responseText.length,
-        usageMetadata
+      // Log detailed token usage and cost analysis
+      console.info('🔍 [CHAT API] Detailed token breakdown:', {
+        input_analysis: {
+          user_message_length: lastUserMessage.length,
+          estimated_input_tokens: Math.ceil(lastUserMessage.length / 4), // rough estimate
+          actual_input_tokens: usageMetadata?.promptTokenCount
+        },
+        output_analysis: {
+          response_length: responseText.length,
+          estimated_output_tokens: Math.ceil(responseText.length / 4),
+          actual_output_tokens: usageMetadata?.candidatesTokenCount
+        },
+        gemini_usage_metadata: usageMetadata,
+        efficiency_metrics: {
+          chars_per_input_token: usageMetadata?.promptTokenCount ? (lastUserMessage.length / usageMetadata.promptTokenCount).toFixed(2) : 'N/A',
+          chars_per_output_token: usageMetadata?.candidatesTokenCount ? (responseText.length / usageMetadata.candidatesTokenCount).toFixed(2) : 'N/A',
+          output_input_ratio: usageMetadata?.candidatesTokenCount && usageMetadata?.promptTokenCount ? 
+            (usageMetadata.candidatesTokenCount / usageMetadata.promptTokenCount).toFixed(2) : 'N/A'
+        }
       });
       // Process complete response
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);

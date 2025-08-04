@@ -213,14 +213,25 @@ export default async function handler(req: any, res: any) {
     console.info('📚 Gemini raw result received');
     const responseText = response.text || '';
     console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
-    // Log token usage metadata
-    console.info('[LEARN API] Tokens used:', {
-      promptTokenCount: response.usageMetadata?.promptTokenCount,
-      candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
-      totalTokenCount: response.usageMetadata?.totalTokenCount,
-      input_length: topic.length,
-      output_length: responseText.length,
-      usageMetadata: response.usageMetadata
+    // Log detailed token usage and cost analysis
+    console.info('🔍 [LEARN API] Detailed token breakdown:', {
+      input_analysis: {
+        topic_length: topic.length,
+        full_prompt_estimate: topic.length + 100, // topic + system prompt overhead
+        actual_input_tokens: response.usageMetadata?.promptTokenCount
+      },
+      output_analysis: {
+        response_length: responseText.length,
+        estimated_output_tokens: Math.ceil(responseText.length / 4),
+        actual_output_tokens: response.usageMetadata?.candidatesTokenCount
+      },
+      gemini_usage_metadata: response.usageMetadata,
+      efficiency_metrics: {
+        chars_per_input_token: response.usageMetadata?.promptTokenCount ? (topic.length / response.usageMetadata.promptTokenCount).toFixed(2) : 'N/A',
+        chars_per_output_token: response.usageMetadata?.candidatesTokenCount ? (responseText.length / response.usageMetadata.candidatesTokenCount).toFixed(2) : 'N/A',
+        output_input_ratio: response.usageMetadata?.candidatesTokenCount && response.usageMetadata?.promptTokenCount ? 
+          (response.usageMetadata.candidatesTokenCount / response.usageMetadata.promptTokenCount).toFixed(2) : 'N/A'
+      }
     });
     // Process complete response - this will throw if parsing fails
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);

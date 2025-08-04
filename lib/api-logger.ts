@@ -50,6 +50,15 @@ class APILoggingService {
   private readonly BATCH_SIZE = 50;
   private readonly FLUSH_INTERVAL = 30000; // 30 seconds
   private flushTimer: NodeJS.Timeout;
+  
+  // Running cost tracking for this session
+  private sessionStats = {
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalCalls: 0,
+    startTime: new Date()
+  };
 
   // Gemini pricing per 1M tokens (update as needed)
   private readonly PRICING = {
@@ -66,15 +75,72 @@ class APILoggingService {
 
   async logAPICall(data: APILogData): Promise<void> {
     try {
-      // Debug: print token metadata
-      console.debug('[API LOGGER] Logging call:', {
+      const modelName = 'gemini-2.5-flash';
+      const inputTokens = data.geminiUsageMetadata?.promptTokenCount || 0;
+      const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0;
+      const totalTokens = data.geminiUsageMetadata?.totalTokenCount || 0;
+      const exactCost = this.calculateCost(inputTokens, outputTokens, modelName);
+      
+      // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs
+      console.info(`💰 [${data.route.toUpperCase()}] TOKEN USAGE & COST BREAKDOWN:`, {
+        timestamp: new Date().toISOString(),
         route: data.route,
         model: data.model,
-        geminiUsageMetadata: data.geminiUsageMetadata,
-        inputTextLength: data.inputText.length,
-        outputTextLength: data.outputText?.length || 0
+        user_id: data.userId?.substring(0, 8) + '...',
+        chat_id: data.chatId,
+        grade_level: data.gradeLevel,
+        success: data.success,
+        error: data.error || 'none',
+        response_time_ms: data.responseTimeMs,
+        
+        // TOKEN BREAKDOWN
+        tokens: {
+          input_tokens: inputTokens,
+          output_tokens: outputTokens, 
+          total_tokens: totalTokens,
+          token_ratio: outputTokens > 0 ? (outputTokens / inputTokens).toFixed(2) : 'N/A'
+        },
+        
+        // TEXT LENGTH ANALYSIS
+        text_analysis: {
+          input_chars: data.inputText.length,
+          output_chars: data.outputText?.length || 0,
+          chars_per_input_token: inputTokens > 0 ? (data.inputText.length / inputTokens).toFixed(2) : 'N/A',
+          chars_per_output_token: outputTokens > 0 ? ((data.outputText?.length || 0) / outputTokens).toFixed(2) : 'N/A'
+        },
+        
+        // COST BREAKDOWN
+        cost_breakdown: {
+          input_cost_usd: ((inputTokens / 1_000_000) * this.PRICING[modelName].input).toFixed(6),
+          output_cost_usd: ((outputTokens / 1_000_000) * this.PRICING[modelName].output).toFixed(6),
+          total_cost_usd: exactCost.toFixed(6),
+          cost_per_1k_tokens: totalTokens > 0 ? ((exactCost / totalTokens) * 1000).toFixed(6) : 'N/A'
+        },
+        
+        // PRICING RATES USED
+        pricing_rates: {
+          model: modelName,
+          input_rate_per_1m: `$${this.PRICING[modelName].input}`,
+          output_rate_per_1m: `$${this.PRICING[modelName].output}`,
+          output_multiplier: `${(this.PRICING[modelName].output / this.PRICING[modelName].input).toFixed(1)}x more than input`
+        },
+        
+        // RAW GEMINI METADATA
+        raw_gemini_metadata: data.geminiUsageMetadata
       });
-      const modelName = 'gemini-2.5-flash';
+      
+      // Update session running totals
+      this.sessionStats.totalCost += exactCost;
+      this.sessionStats.totalInputTokens += inputTokens;
+      this.sessionStats.totalOutputTokens += outputTokens;
+      this.sessionStats.totalCalls += 1;
+      
+      // Additional high-level summary for easy scanning
+      const costInCents = exactCost * 100;
+      const sessionCostInCents = this.sessionStats.totalCost * 100;
+      console.info(`💸 [${data.route.toUpperCase()}] COST SUMMARY: $${exactCost.toFixed(6)} (${costInCents.toFixed(3)}¢) | ${inputTokens}→${outputTokens} tokens | ${data.responseTimeMs}ms`);
+      console.info(`📊 [SESSION TOTALS] Calls: ${this.sessionStats.totalCalls} | Total Cost: $${this.sessionStats.totalCost.toFixed(6)} (${sessionCostInCents.toFixed(3)}¢) | Tokens: ${this.sessionStats.totalInputTokens}→${this.sessionStats.totalOutputTokens}`);
+      
       const entry: LogEntry = {
         timestamp: new Date().toISOString(),
         route: data.route,
@@ -82,19 +148,15 @@ class APILoggingService {
         chat_id: data.chatId,
         grade_level: data.gradeLevel,
         model: data.model,
-        input_tokens: data.geminiUsageMetadata?.promptTokenCount || 0,
-        output_tokens: data.geminiUsageMetadata?.candidatesTokenCount || 0,
-        total_tokens: data.geminiUsageMetadata?.totalTokenCount || 0,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: totalTokens,
         input_length: data.inputText.length,
         output_length: data.outputText?.length || 0,
         response_time_ms: data.responseTimeMs,
         success: data.success,
         error_type: data.error,
-        exact_cost: this.calculateCost(
-          data.geminiUsageMetadata?.promptTokenCount || 0,
-          data.geminiUsageMetadata?.candidatesTokenCount || 0,
-          modelName
-        )
+        exact_cost: exactCost
       };
 
       this.buffer.push(entry);
