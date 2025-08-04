@@ -205,11 +205,13 @@ export default async function handler(req: any, res: any) {
     console.info('📖 Gemini raw result received');
     const responseText = response.text || '';
     console.info('📖 Gemini response text:', responseText.substring(0, 200) + '...');
-    // Debug: print token metadata
-    console.debug('[STORY API] Logging tokens:', {
+    // Log token usage metadata
+    console.info('[STORY API] Tokens used:', {
       promptTokenCount: response.usageMetadata?.promptTokenCount,
       candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
       totalTokenCount: response.usageMetadata?.totalTokenCount,
+      input_length: prompt.length,
+      output_length: responseText.length,
       usageMetadata: response.usageMetadata
     });
     // Process complete response - this will throw if parsing fails

@@ -176,7 +176,7 @@ export default async function handler(req: any, res: any) {
 
     // Inject system instructions into config (as per GenAI best practice)
     config.systemInstruction = [ { text: systemInstructions } ];
-
+    
     // The user prompt is the last user message
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
 
@@ -204,6 +204,8 @@ export default async function handler(req: any, res: any) {
         config,
         contents,
       });
+      // Capture token usage metadata from Gemini API response
+      usageMetadata = (response as any).usageMetadata;
 
       aiDurationMs = Date.now() - aiStart;
       console.info(`🦉 [chat] ← Gemini (${aiDurationMs}ms)`);
@@ -218,11 +220,13 @@ export default async function handler(req: any, res: any) {
         console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
       }
       console.debug('🦉 Gemini response text (truncated):', responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
-      // Debug: print token metadata
-      console.debug('[CHAT API] Logging tokens:', {
+      // Log token usage metadata
+      console.info('[CHAT API] Tokens used:', {
         promptTokenCount: usageMetadata?.promptTokenCount,
         candidatesTokenCount: usageMetadata?.candidatesTokenCount,
         totalTokenCount: usageMetadata?.totalTokenCount,
+        input_length: lastUserMessage.length,
+        output_length: responseText.length,
         usageMetadata
       });
       // Process complete response
