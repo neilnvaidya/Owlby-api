@@ -15,7 +15,7 @@ export const chatResponseSchema = {
     },
     interactive_elements: {
       type: Type.OBJECT,
-      required: ["followup_buttons"],
+      required: ["followup_buttons", "story_button", "learn_more"],
       properties: {
         followup_buttons: {
           type: Type.ARRAY,

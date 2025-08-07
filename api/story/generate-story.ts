@@ -29,9 +29,6 @@ const getStoryConfig = (prompt: string, gradeLevel: number) => {
   const ageYears = gradeLevel + 5; // Grade 1 = ~6 years old, Grade 3 = ~8 years old, etc.
   
   return {
-    thinkingConfig: {
-      thinkingBudget: 0,
-    },
     safetySettings: [
       {
         category: HarmCategory.HARM_CATEGORY_HARASSMENT,
