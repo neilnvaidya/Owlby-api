@@ -6,6 +6,7 @@ import {
   Type,
 } from '@google/genai';
 import { logStoryCall, flushApiLogger } from '../../lib/api-logger';
+import { ACHIEVEMENT_TAG_ENUM } from '../../lib/badgeCategories';
 
 // Use regular console for API logging
 
@@ -83,7 +84,7 @@ const getStoryConfig = (prompt: string, gradeLevel: number) => {
               type: Type.STRING,
               description: "Optional lesson or moral from the story"
             },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+            tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } }
           }
         }
       }
@@ -106,7 +107,7 @@ Structure your response as JSON matching the schema:
 - **Setting**: Describe where/when story happens
 - **Moral**: Optional lesson (keep it light and natural)
 
-Tags: Add a `tags` array with UPPERCASE ENUM values from [READING_STORIES, CHAT_CHAMPION, PROBLEM_SOLVING, DAILY_LEARNER] that best match the story content.
+Tags: Add a `tags` array with UPPERCASE ENUM values chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')} that best match the story content.
 
 Use your friendly Owlby personality with occasional "Hoot hoot!" expressions. Make the story vivid and fun while keeping language appropriate for the grade level.`
       }

@@ -6,6 +6,7 @@ import {
   Type,
 } from '@google/genai';
 import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
+import { ACHIEVEMENT_TAG_ENUM } from '../../lib/badgeCategories';
 
 // Use regular console for API logging
 
@@ -71,7 +72,7 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
                 }
               }
             },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
             difficulty: { type: Type.INTEGER },
             challengeQuiz: {
               type: Type.ARRAY,
@@ -102,7 +103,7 @@ Sections:
 4. conclusion – single wrap-up sentence
 5. keyPoints – 2–5 bullet strings
 6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
-7. tags – 2-8 UPPERCASE ENUM strings from [READING_STORIES, CHAT_CHAMPION, PROBLEM_SOLVING, DAILY_LEARNER]; choose those that best fit the content
+7. tags – 2-8 UPPERCASE ENUM strings chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')}; choose those that best fit the content
 8. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
 9. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
 
