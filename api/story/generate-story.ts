@@ -82,7 +82,8 @@ const getStoryConfig = (prompt: string, gradeLevel: number) => {
             moral: {
               type: Type.STRING,
               description: "Optional lesson or moral from the story"
-            }
+            },
+            tags: { type: Type.ARRAY, items: { type: Type.STRING } }
           }
         }
       }
@@ -104,6 +105,8 @@ Structure your response as JSON matching the schema:
 - **Characters**: List main characters
 - **Setting**: Describe where/when story happens
 - **Moral**: Optional lesson (keep it light and natural)
+
+Tags: Add a `tags` array with UPPERCASE ENUM values from [READING_STORIES, CHAT_CHAMPION, PROBLEM_SOLVING, DAILY_LEARNER] that best match the story content.
 
 Use your friendly Owlby personality with occasional "Hoot hoot!" expressions. Make the story vivid and fun while keeping language appropriate for the grade level.`
       }
@@ -132,6 +135,7 @@ function processStoryResponse(responseText: string, prompt: string, gradeLevel: 
         characters: story.characters || [],
         setting: story.setting || '',
         moral: story.moral || '',
+        tags: story.tags || [],
         timestamp: new Date().toISOString()
       };
     } else {

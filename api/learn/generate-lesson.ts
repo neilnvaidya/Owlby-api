@@ -102,7 +102,7 @@ Sections:
 4. conclusion – single wrap-up sentence
 5. keyPoints – 2–5 bullet strings
 6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
-7. tags – 2-8 lowercase single-word strings (e.g., space, biology)
+7. tags – 2-8 UPPERCASE ENUM strings from [READING_STORIES, CHAT_CHAMPION, PROBLEM_SOLVING, DAILY_LEARNER]; choose those that best fit the content
 8. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
 9. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
 
