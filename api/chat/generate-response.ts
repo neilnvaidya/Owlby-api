@@ -259,6 +259,27 @@ Return VALID JSON only.` } ];
       });
       // Process complete response
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
+      // Normalize tags: exactly 1 required topic tag, optionalTags 1..5
+      try {
+        const rawRequired: any[] = Array.isArray((processedResponse as any).requiredCategoryTags) ? (processedResponse as any).requiredCategoryTags : [];
+        const filteredRequired = rawRequired.filter((t) => ACHIEVEMENT_TAG_ENUM.includes(t));
+        (processedResponse as any).requiredCategoryTags = filteredRequired.slice(0, 1);
+        const rawOptional: any[] = Array.isArray((processedResponse as any).optionalTags) ? (processedResponse as any).optionalTags : [];
+        let normalizedOptional = rawOptional.slice(0, 5);
+        if (normalizedOptional.length === 0) {
+          const lmTags = (processedResponse as any)?.interactive_elements?.learn_more?.tags;
+          if (Array.isArray(lmTags) && lmTags.length > 0) {
+            normalizedOptional = lmTags.slice(0, 5);
+          } else {
+            const text = (processedResponse as any)?.response_text?.main || '';
+            normalizedOptional = text
+              .split(/[^a-zA-Z]+/)
+              .filter(Boolean)
+              .slice(0, 3);
+          }
+        }
+        (processedResponse as any).optionalTags = normalizedOptional;
+      } catch {}
 
       if (ENABLE_API_LOGGING) {
         logChatCall({

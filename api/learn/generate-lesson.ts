@@ -241,6 +241,14 @@ export default async function handler(req: any, res: any) {
     });
     // Process complete response - this will throw if parsing fails
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
+    // Normalize tags: ensure exactly 1 required topic tag and 1..5 optional tags if present
+    try {
+      const required = Array.isArray((processedResponse as any).tags) ? (processedResponse as any).tags : Array.isArray((processedResponse as any).requiredCategoryTags) ? (processedResponse as any).requiredCategoryTags : [];
+      const filteredRequired = (required as any[]).filter((t) => (ACHIEVEMENT_TAG_ENUM as any).includes(t));
+      (processedResponse as any).requiredCategoryTags = filteredRequired.slice(0, 1);
+      const rawOptional: any[] = Array.isArray((processedResponse as any).optionalTags) ? (processedResponse as any).optionalTags : [];
+      (processedResponse as any).optionalTags = rawOptional.slice(0, 5);
+    } catch {}
 
     logLessonCall({
       userId,
