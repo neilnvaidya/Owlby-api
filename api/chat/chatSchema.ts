@@ -5,6 +5,8 @@ export const chatResponseSchema = {
   type: Type.OBJECT,
   required: ["response_text", "interactive_elements"],
   properties: {
+    requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    optionalTags: { type: Type.ARRAY, items: { type: Type.STRING } },
     response_text: {
       type: Type.OBJECT,
       required: ["main"],

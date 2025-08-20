@@ -84,7 +84,10 @@ const getStoryConfig = (prompt: string, gradeLevel: number) => {
               type: Type.STRING,
               description: "Optional lesson or moral from the story"
             },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } }
+            // Deprecated: keep for backward compatibility
+            tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
+            requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
+            optionalTags: { type: Type.ARRAY, items: { type: Type.STRING } }
           }
         }
       }
@@ -107,7 +110,9 @@ Structure your response as JSON matching the schema:
 - **Setting**: Describe where/when story happens
 - **Moral**: Optional lesson (keep it light and natural)
 
-Tags: Add a `tags` array with UPPERCASE ENUM values chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')} that best match the story content.
+Tags: Include both fields
+- requiredCategoryTags: 1–5 UPPERCASE ENUM values chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')} (these map directly to badges)
+- optionalTags: 0–10 free-form strings for analytics (no PII)
 
 Use your friendly Owlby personality with occasional "Hoot hoot!" expressions. Make the story vivid and fun while keeping language appropriate for the grade level.`
       }
@@ -136,7 +141,7 @@ function processStoryResponse(responseText: string, prompt: string, gradeLevel: 
         characters: story.characters || [],
         setting: story.setting || '',
         moral: story.moral || '',
-        tags: story.tags || [],
+        tags: story.tags || story.requiredCategoryTags || [],
         timestamp: new Date().toISOString()
       };
     } else {

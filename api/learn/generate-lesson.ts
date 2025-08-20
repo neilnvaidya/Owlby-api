@@ -72,7 +72,10 @@ const getLessonConfig = (topic: string, gradeLevel: number) => {
                 }
               }
             },
+            // Deprecated: keep for backward compatibility
             tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
+            requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
+            optionalTags: { type: Type.ARRAY, items: { type: Type.STRING } },
             difficulty: { type: Type.INTEGER },
             challengeQuiz: {
               type: Type.ARRAY,
@@ -103,9 +106,10 @@ Sections:
 4. conclusion – single wrap-up sentence
 5. keyPoints – 2–5 bullet strings
 6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
-7. tags – 2-8 UPPERCASE ENUM strings chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')}; choose those that best fit the content
-8. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
-9. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
+7. requiredCategoryTags – 1–5 UPPERCASE ENUM strings chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')}; these map directly to badges
+8. optionalTags – 0–10 free-form strings for analytics; do NOT include PII
+9. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
+10. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
 
 Use learner profile: { ageYears: ${ageYears}, gradeLevel: ${gradeLevel} }.
 

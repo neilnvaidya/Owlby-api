@@ -8,6 +8,7 @@ import {
 import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 import { buildSystemInstructions } from './sessionPromptBuilder';
 import { chatResponseSchema } from './chatSchema';
+import { ACHIEVEMENT_TAG_ENUM } from '../../lib/badgeCategories';
 
 config();
 
@@ -175,7 +176,13 @@ export default async function handler(req: any, res: any) {
     });
 
     // Inject system instructions into config (as per GenAI best practice)
-    config.systemInstruction = [ { text: systemInstructions } ];
+    config.systemInstruction = [ { text: `${systemInstructions}
+
+TAGS OUTPUT RULES:
+- requiredCategoryTags: 1–5 UPPERCASE ENUM values from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]; these map directly to badges.
+- optionalTags: 0–10 free-form strings for analytics; do NOT include PII.
+
+Return VALID JSON only.` } ];
     
     // The user prompt is the last user message
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
