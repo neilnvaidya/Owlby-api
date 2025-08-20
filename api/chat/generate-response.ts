@@ -179,7 +179,7 @@ export default async function handler(req: any, res: any) {
     config.systemInstruction = [ { text: `${systemInstructions}
 
 TAGS OUTPUT RULES:
-- requiredCategoryTags: 1–5 UPPERCASE ENUM values from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]; these map directly to badges.
+- requiredCategoryTags: 1–3 UPPERCASE ENUM values from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]; these are TOPIC categories only. Do NOT include usage/behavior categories like CHAT_CHAMPION, DAILY_LEARNER, EXPLORATION_MASTER, LEARNING_STREAK.
 - optionalTags: 0–10 free-form strings for analytics; do NOT include PII.
 
 Return VALID JSON only.` } ];

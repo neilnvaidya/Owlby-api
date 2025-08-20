@@ -111,7 +111,7 @@ Structure your response as JSON matching the schema:
 - **Moral**: Optional lesson (keep it light and natural)
 
 Tags: Include both fields
-- requiredCategoryTags: 1–5 UPPERCASE ENUM values chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')} (these map directly to badges)
+- requiredCategoryTags: 1–3 UPPERCASE ENUM values chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')}; these are TOPIC categories only (do NOT include usage badges like CHAT_CHAMPION or DAILY_LEARNER)
 - optionalTags: 0–10 free-form strings for analytics (no PII)
 
 Use your friendly Owlby personality with occasional "Hoot hoot!" expressions. Make the story vivid and fun while keeping language appropriate for the grade level.`

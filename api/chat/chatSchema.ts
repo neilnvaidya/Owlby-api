@@ -5,7 +5,9 @@ export const chatResponseSchema = {
   type: Type.OBJECT,
   required: ["response_text", "interactive_elements"],
   properties: {
-    requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING } },
+    requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING, enum: [
+      'READING_STORIES','LANGUAGE_WORDS','SPEAKING_LISTENING','MATH_NUMBERS','MATH_PATTERNS','PROBLEM_SOLVING','ANIMALS_NATURE','PLANTS_GARDENS','SPACE_PLANETS','EXPERIMENTS_DISCOVERY','COUNTRIES_CULTURES','HISTORY_HEROES','COMMUNITY_HELPERS','FRIENDSHIP_KINDNESS','HEALTH_SAFETY','CREATIVITY_ARTS'
+    ] as any } },
     optionalTags: { type: Type.ARRAY, items: { type: Type.STRING } },
     response_text: {
       type: Type.OBJECT,
