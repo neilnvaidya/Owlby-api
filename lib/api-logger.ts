@@ -9,9 +9,8 @@ const supabase = createClient(
 );
 
 interface APILogData {
-  route: 'chat' | 'lesson' | 'story' | 'other';
+  route: 'chat' | 'lesson' | 'story';
   userId?: string;
-  sessionId?: string;
   chatId?: string;
   gradeLevel: number;
   model: string;
@@ -32,7 +31,6 @@ interface LogEntry {
   timestamp: string;
   route: string;
   user_id?: string;
-  session_id?: string;
   chat_id?: string;
   grade_level: number;
   model: string;
@@ -44,9 +42,7 @@ interface LogEntry {
   response_time_ms: number;
   success: boolean;
   error_type?: string;
-  input_cost: number;
-  output_cost: number;
-  total_cost: number;
+  exact_cost: number;
 }
 
 class APILoggingService {
@@ -85,7 +81,7 @@ class APILoggingService {
       const totalTokens = data.geminiUsageMetadata?.totalTokenCount || 0;
       const exactCost = this.calculateCost(inputTokens, outputTokens, modelName);
       
-      // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs
+      // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs 
       console.info(`💰 [${data.route.toUpperCase()}] TOKEN USAGE & COST BREAKDOWN:`, {
         timestamp: new Date().toISOString(),
         route: data.route,
@@ -149,7 +145,6 @@ class APILoggingService {
         timestamp: new Date().toISOString(),
         route: data.route,
         user_id: data.userId,
-        session_id: data.sessionId,
         chat_id: data.chatId,
         grade_level: data.gradeLevel,
         model: data.model,
@@ -161,9 +156,7 @@ class APILoggingService {
         response_time_ms: data.responseTimeMs,
         success: data.success,
         error_type: data.error,
-        input_cost: (inputTokens / 1_000_000) * this.PRICING[modelName].input,
-        output_cost: (outputTokens / 1_000_000) * this.PRICING[modelName].output,
-        total_cost: exactCost
+        exact_cost: exactCost
       };
 
       this.buffer.push(entry);
@@ -221,8 +214,7 @@ export const flushApiLogger = () => apiLogger.flushNow();
 
 export const logChatCall = (data: {
     userId?: string;
-    sessionId?: string;
-  chatId?: string;
+    chatId: string;
     gradeLevel: number;
     message: string;
     responseText?: string;
@@ -243,7 +235,6 @@ export const logChatCall = (data: {
   
   export const logLessonCall = (data: {
     userId?: string;
-    sessionId?: string;
     gradeLevel: number;
     topic: string;
     responseText?: string;
@@ -264,7 +255,6 @@ export const logChatCall = (data: {
   
   export const logStoryCall = (data: {
     userId?: string;
-    sessionId?: string;
     gradeLevel: number;
     prompt: string;
     responseText?: string;
