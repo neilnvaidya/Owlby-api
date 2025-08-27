@@ -5,6 +5,10 @@
       "destination": "/api/health"
     },
     {
+      "source": "/achievements/sync",
+      "destination": "/api/achievements/sync"
+    },
+    {
       "source": "/verify-email",
       "destination": "/api/verify-email"
     },

@@ -1,137 +1,22 @@
-import { config } from 'dotenv';
-import {
-  GoogleGenAI,
-  HarmBlockThreshold,
-  HarmCategory,
-  Type,
-} from '@google/genai';
 import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
-import { ACHIEVEMENT_TAG_ENUM } from '../../lib/badgeCategories';
-
-// Use regular console for API logging
-
-config();
-
-const API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is required');
-}
-
-const ai = new GoogleGenAI({
-  apiKey: API_KEY,
-});
-
-
-
-// Get the lesson generation configuration with safety settings and response schema
-const getLessonConfig = (topic: string, gradeLevel: number) => {
-  const ageYears = gradeLevel + 5; // Rough approximation
-  
-  return {
-
-    safetySettings: [
-      {
-        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-        threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-        threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-        threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-      },
-      {
-        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-        threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-      },
-    ],
-    responseMimeType: 'application/json',
-    responseSchema: {
-      type: Type.OBJECT,
-      required: ["lesson"],
-      properties: {
-        lesson: {
-          type: Type.OBJECT,
-          required: ["title", "introduction", "body", "conclusion", "keyPoints", "keywords", "challengeQuiz"],
-          properties: {
-            title: { type: Type.STRING },
-            introduction: { type: Type.STRING },
-            body: { type: Type.ARRAY, items: { type: Type.STRING } },
-            conclusion: { type: Type.STRING },
-            keyPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-            keywords: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                required: ["term", "definition"],
-                properties: {
-                  term: { type: Type.STRING },
-                  definition: { type: Type.STRING }
-                }
-              }
-            },
-            // Deprecated: keep for backward compatibility
-            tags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
-            requiredCategoryTags: { type: Type.ARRAY, items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } },
-            optionalTags: { type: Type.ARRAY, items: { type: Type.STRING } },
-            difficulty: { type: Type.INTEGER },
-            challengeQuiz: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                required: ["question", "options", "correctAnswerIndex", "explanation"],
-                properties: {
-                  question: { type: Type.STRING },
-                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  correctAnswerIndex: { type: Type.INTEGER },
-                  explanation: { type: Type.STRING }
-                }
-              }
-            }
-          }
-        }
-      },
-    },
-    systemInstruction: [
-      {
-        text: `You are Owlby – a concise, engaging mentor.
-Create a lesson about "${topic}" for grade ${gradeLevel} (approx. ${ageYears} y/o) in VALID JSON matching the provided schema.
-
-Sections:
-1. title – ≤50 chars, catchy, no quotes
-2. introduction – ONE clear sentence that hooks interest
-3. body – 1–4 short paragraphs, 100 - 250 characters each, scaling with user profile (array of strings)
-4. conclusion – single wrap-up sentence
-5. keyPoints – 2–5 bullet strings
-6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
-7. requiredCategoryTags – 1–3 UPPERCASE ENUM strings chosen from: ${ACHIEVEMENT_TAG_ENUM.join(', ')}; TOPIC categories only (no CHAT_CHAMPION/DAILY_LEARNER/etc.)
-8. optionalTags – 0–10 free-form strings for analytics; do NOT include PII
-9. difficulty – integer 0-20 (0=kinder, 20=8th-grade); pick realistically for content depth
-10. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
-
-Use learner profile: { ageYears: ${ageYears}, gradeLevel: ${gradeLevel} }.
-
-Return ONLY the JSON.`
-      }
-    ],
-  };
-};
+import { lessonResponseSchema } from '../../lib/ai-schemas';
+import { getLessonInstructions } from '../../lib/ai-instructions';
+import { buildAIConfig } from '../../lib/ai-config';
+import { 
+  handleCORS, 
+  processAIRequest, 
+  normalizeAchievementTags, 
+  createErrorResponse 
+} from '../../lib/api-handler';
 
 /**
- * Process the JSON response from the new API format
- * @param responseText The raw response from Gemini (should be JSON)
- * @returns Processed lesson response
+ * Process the JSON response from lesson generation API
  */
 function processLessonResponse(responseText: string, topic: string, gradeLevel: number) {
   try {
-    // Parse the JSON response
     const jsonResponse = JSON.parse(responseText);
     
-    // Validate the expected structure
     if (jsonResponse.lesson) {
-      // Return the format that matches the React Native app's Lesson type
       const lesson = jsonResponse.lesson;
       return {
         topic: topic,
@@ -147,6 +32,9 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
+        // Include normalized achievement tags
+        requiredCategoryTags: lesson.requiredCategoryTags || [],
+        optionalTags: lesson.optionalTags || []
       };
     } else {
       throw new Error('Invalid lesson JSON structure');
@@ -158,46 +46,40 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
 }
 
 export default async function handler(req: any, res: any) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Handle preflight (OPTIONS) request
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
+  // Handle CORS and validate request method
+  if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
   const { topic, gradeLevel = 3, userId } = req.body;
-  const model = 'gemini-2.5-flash';
+  
+  // Validate required parameters
+  if (!topic) {
+    console.info('❌ Missing topic');
     
-    if (!topic) {
-      console.info('❌ Missing topic');
-      logLessonCall({
-        userId,
-        gradeLevel,
-        topic: topic || 'unknown',
-        responseTimeMs: Date.now() - startTime,
-        success: false,
-        error: 'BadRequest',
-        model,
-      });
-      await flushApiLogger();
-      return res.status(400).json({ error: "Topic is required." });
-    }
+    logLessonCall({
+      userId,
+      gradeLevel,
+      topic: topic || 'unknown',
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: 'BadRequest',
+      model: 'gemini-2.5-flash',
+    });
+    await flushApiLogger();
+    
+    return res.status(400).json({ error: "Topic is required." });
+  }
 
   try {
-    console.info('📚 Lesson Generate API: Request received', req.body);
+    console.info('📚 [lesson] Request received for topic:', topic);
     
-    // Get the configuration for this lesson
-    const config = getLessonConfig(topic, gradeLevel);
+    // Build system instructions
+    const systemInstructions = getLessonInstructions(topic, gradeLevel);
     
-    // Create the contents array with user input
+    // Build AI configuration
+    const config = buildAIConfig(lessonResponseSchema, systemInstructions);
+    
+    // Create contents for AI request
     const contents = [
       {
         role: 'user',
@@ -209,47 +91,21 @@ export default async function handler(req: any, res: any) {
       },
     ];
     
-    console.info('📚 Sending lesson request to Gemini for topic:', topic);
-    const response = await ai.models.generateContent({
-      model,
-      config,
-      contents,
-    });
+    // Process AI request using centralized handler
+    const { responseText, usageMetadata } = await processAIRequest(
+      config, 
+      contents, 
+      'lesson', 
+      topic
+    );
     
-    console.info('📚 Gemini raw result received');
-    const responseText = response.text || '';
-    console.info('📚 Gemini response text:', responseText.substring(0, 200) + '...');
-    // Log detailed token usage and cost analysis
-    console.info('🔍 [LEARN API] Detailed token breakdown:', {
-      input_analysis: {
-        topic_length: topic.length,
-        full_prompt_estimate: topic.length + 100, // topic + system prompt overhead
-        actual_input_tokens: response.usageMetadata?.promptTokenCount
-      },
-      output_analysis: {
-        response_length: responseText.length,
-        estimated_output_tokens: Math.ceil(responseText.length / 4),
-        actual_output_tokens: response.usageMetadata?.candidatesTokenCount
-      },
-      gemini_usage_metadata: response.usageMetadata,
-      efficiency_metrics: {
-        chars_per_input_token: response.usageMetadata?.promptTokenCount ? (topic.length / response.usageMetadata.promptTokenCount).toFixed(2) : 'N/A',
-        chars_per_output_token: response.usageMetadata?.candidatesTokenCount ? (responseText.length / response.usageMetadata.candidatesTokenCount).toFixed(2) : 'N/A',
-        output_input_ratio: response.usageMetadata?.candidatesTokenCount && response.usageMetadata?.promptTokenCount ? 
-          (response.usageMetadata.candidatesTokenCount / response.usageMetadata.promptTokenCount).toFixed(2) : 'N/A'
-      }
-    });
-    // Process complete response - this will throw if parsing fails
+    // Process the lesson response
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
-    // Normalize tags: ensure exactly 1 required topic tag and 1..5 optional tags if present
-    try {
-      const required = Array.isArray((processedResponse as any).tags) ? (processedResponse as any).tags : Array.isArray((processedResponse as any).requiredCategoryTags) ? (processedResponse as any).requiredCategoryTags : [];
-      const filteredRequired = (required as any[]).filter((t) => (ACHIEVEMENT_TAG_ENUM as any).includes(t));
-      (processedResponse as any).requiredCategoryTags = filteredRequired.slice(0, 1);
-      const rawOptional: any[] = Array.isArray((processedResponse as any).optionalTags) ? (processedResponse as any).optionalTags : [];
-      (processedResponse as any).optionalTags = rawOptional.slice(0, 5);
-    } catch {}
+    
+    // Normalize achievement tags
+    normalizeAchievementTags(processedResponse);
 
+    // Log successful request
     logLessonCall({
       userId,
       gradeLevel,
@@ -257,16 +113,17 @@ export default async function handler(req: any, res: any) {
       responseText,
       responseTimeMs: Date.now() - startTime,
       success: true,
-      usageMetadata: response.usageMetadata,
-      model,
+      usageMetadata,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
 
-    console.info('✅ Lesson Generate API: Responding with lesson for topic:', topic);
+    console.info('✅ [lesson] Successfully generated lesson for topic:', topic);
     
     return res.status(200).json(processedResponse);
+    
   } catch (error: any) {
-    console.error('❌ Lesson Generate API Error:', error);
+    // Log failed request
     logLessonCall({
       userId,
       gradeLevel,
@@ -274,12 +131,15 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
-    return res.status(500).json({ 
-      error: 'An unexpected error occurred while generating the lesson.',
-      topic: req.body?.topic
+
+    // Create standardized error response
+    const errorResponse = createErrorResponse(error, 'lesson', { 
+      topic: req.body?.topic 
     });
+    
+    return res.status(errorResponse.status).json(errorResponse.body);
   }
-} 
+}
