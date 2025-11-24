@@ -13,6 +13,22 @@ import {
 // Toggle Supabase API logging
 const ENABLE_API_LOGGING = false;
 
+// Text truncation configuration
+const TEXT_TRUNCATION = {
+  MAX_MAIN_LENGTH: 500,
+  MAX_FOLLOWUP_LENGTH: 200,
+  MAX_BUTTON_LENGTH: 50,
+  MAX_PROMPT_LENGTH: 100,
+} as const;
+
+/**
+ * Truncate text to specified length with ellipsis
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + '...';
+}
+
 /**
  * Process the JSON response from Owlby chat API
  */
@@ -21,6 +37,29 @@ function processOwlbyResponse(responseText: string) {
     const jsonResponse = JSON.parse(responseText);
     
     if (jsonResponse.response_text && jsonResponse.interactive_elements) {
+      // Truncate text fields
+      if (jsonResponse.response_text.main) {
+        jsonResponse.response_text.main = truncateText(jsonResponse.response_text.main, TEXT_TRUNCATION.MAX_MAIN_LENGTH);
+      }
+      if (jsonResponse.response_text.follow_up) {
+        jsonResponse.response_text.follow_up = truncateText(jsonResponse.response_text.follow_up, TEXT_TRUNCATION.MAX_FOLLOWUP_LENGTH);
+      }
+      
+      // Truncate interactive elements
+      if (jsonResponse.interactive_elements.followup_buttons) {
+        jsonResponse.interactive_elements.followup_buttons = jsonResponse.interactive_elements.followup_buttons.map((button: string) => 
+          truncateText(button, TEXT_TRUNCATION.MAX_BUTTON_LENGTH)
+        );
+      }
+      
+      if (jsonResponse.interactive_elements.learn_more?.prompt) {
+        jsonResponse.interactive_elements.learn_more.prompt = truncateText(jsonResponse.interactive_elements.learn_more.prompt, TEXT_TRUNCATION.MAX_PROMPT_LENGTH);
+      }
+      
+      if (jsonResponse.interactive_elements.story_button?.story_prompt) {
+        jsonResponse.interactive_elements.story_button.story_prompt = truncateText(jsonResponse.interactive_elements.story_button.story_prompt, TEXT_TRUNCATION.MAX_PROMPT_LENGTH);
+      }
+      
       return {
         success: true,
         data: jsonResponse
@@ -35,7 +74,7 @@ function processOwlbyResponse(responseText: string) {
       success: false,
       data: {
         response_text: {
-          main: responseText,
+          main: truncateText(responseText, TEXT_TRUNCATION.MAX_MAIN_LENGTH),
           follow_up: "What would you like to learn about next?"
         },
         interactive_elements: {
@@ -189,7 +228,7 @@ export default async function handler(req: any, res: any) {
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
         processedResponse = {
           response_text: {
-            main: "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?"
+            main: truncateText("Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?", TEXT_TRUNCATION.MAX_MAIN_LENGTH)
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],
@@ -200,7 +239,7 @@ export default async function handler(req: any, res: any) {
       } else {
         processedResponse = {
           response_text: {
-            main: "Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?"
+            main: truncateText("Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?", TEXT_TRUNCATION.MAX_MAIN_LENGTH)
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],

@@ -9,6 +9,26 @@ import {
   createErrorResponse 
 } from '../../lib/api-handler';
 
+// Text truncation configuration
+const TEXT_TRUNCATION = {
+  MAX_TITLE_LENGTH: 100,
+  MAX_INTRODUCTION_LENGTH: 500,
+  MAX_BODY_LENGTH: 1000,
+  MAX_CONCLUSION_LENGTH: 300,
+  MAX_KEYPOINT_LENGTH: 100,
+  MAX_DEFINITION_LENGTH: 200,
+  MAX_QUESTION_LENGTH: 200,
+  MAX_OPTION_LENGTH: 100,
+} as const;
+
+/**
+ * Truncate text to specified length with ellipsis
+ */
+function truncateText(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text;
+  return text.slice(0, maxLength - 3) + '...';
+}
+
 /**
  * Process the JSON response from lesson generation API
  */
@@ -21,14 +41,28 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
       return {
         topic: topic,
         gradeLevel: gradeLevel,
-        title: lesson.title,
-        introduction: lesson.introduction.replace(/\\n/g, '\n'),
-        body: (lesson.body || []).map((p: string) => p.replace(/\\n/g, '\n')),
-        conclusion: lesson.conclusion,
-        keyPoints: lesson.keyPoints || [],
-        keywords: lesson.keywords || [],
+        title: truncateText(lesson.title, TEXT_TRUNCATION.MAX_TITLE_LENGTH),
+        introduction: truncateText(lesson.introduction.replace(/\\n/g, '\n'), TEXT_TRUNCATION.MAX_INTRODUCTION_LENGTH),
+        body: (lesson.body || []).map((p: string) => 
+          truncateText(p.replace(/\\n/g, '\n'), TEXT_TRUNCATION.MAX_BODY_LENGTH)
+        ),
+        conclusion: truncateText(lesson.conclusion, TEXT_TRUNCATION.MAX_CONCLUSION_LENGTH),
+        keyPoints: (lesson.keyPoints || []).map((point: string) => 
+          truncateText(point, TEXT_TRUNCATION.MAX_KEYPOINT_LENGTH)
+        ),
+        keywords: (lesson.keywords || []).map((keyword: any) => ({
+          ...keyword,
+          term: truncateText(keyword.term, 50),
+          definition: truncateText(keyword.definition, TEXT_TRUNCATION.MAX_DEFINITION_LENGTH)
+        })),
         challengeQuiz: {
-          questions: lesson.challengeQuiz || []
+          questions: (lesson.challengeQuiz || []).map((question: any) => ({
+            ...question,
+            question: truncateText(question.question, TEXT_TRUNCATION.MAX_QUESTION_LENGTH),
+            options: (question.options || []).map((option: string) => 
+              truncateText(option, TEXT_TRUNCATION.MAX_OPTION_LENGTH)
+            )
+          }))
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
