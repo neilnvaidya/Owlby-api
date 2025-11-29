@@ -44,11 +44,13 @@ TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years o
 OUTPUT RULES (MUST COMPLY):
 1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
 2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
-3. response_text.main: 2–3 concise paragraphs that answer the user clearly. NEVER truncate or use "..." or ellipsis – always complete your thoughts fully.
-4. response_text.follow_up: ONE engaging follow-up question (optional but recommended).
+3. response_text.main: 2–3 paragraphs (300-800 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
+4. response_text.follow_up: ONE complete engaging follow-up question (50-150 characters). MUST be a complete sentence ending with a question mark.
 5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
 6. interactive_elements.learn_more: include when deeper exploration makes sense (prompt + optional tags).
 7. interactive_elements.story_button: include when a short story could illustrate the topic.
+
+CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
 
 ${TAG_OUTPUT_RULES}
 

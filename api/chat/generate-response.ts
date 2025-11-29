@@ -214,6 +214,13 @@ export default async function handler(req: any, res: any) {
     const totalMs = Date.now() - startTime;
     console.info(`✅ [chat] done chatId=${chatId} ok=${processedResponse?.success ?? true} total=${totalMs}ms (AI ${aiDurationMs}ms)`);
     
+    // Log full response being sent to client (for debugging truncation issues)
+    const mainTextLen = processedResponse?.response_text?.main?.length ?? 0;
+    const followUpLen = processedResponse?.response_text?.follow_up?.length ?? 0;
+    console.info(`📤 [chat] SENDING response: main=${mainTextLen} chars, follow_up=${followUpLen} chars`);
+    console.info(`📤 [chat] FULL_MAIN_TEXT:`, processedResponse?.response_text?.main);
+    console.info(`📤 [chat] FULL_FOLLOW_UP:`, processedResponse?.response_text?.follow_up);
+    
     if (ENABLE_API_LOGGING) {
       await flushApiLogger();
     }
