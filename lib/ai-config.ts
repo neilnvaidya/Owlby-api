@@ -64,14 +64,16 @@ export function gradeToAge(gradeLevel: number): number {
 export function buildAIConfig(
   responseSchema: any,
   systemInstruction: string,
-  maxOutputTokens: number = 2048
+  maxOutputTokens: number = 4096
 ) {
   return {
     safetySettings: SAFETY_SETTINGS,
     responseMimeType: 'application/json',
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
-    maxOutputTokens, // Ensure sufficient output space to prevent truncation
+    // Output control parameters (must be at top level of config)
+    maxOutputTokens,
+    temperature: 0.8,
   };
 }
 

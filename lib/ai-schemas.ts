@@ -39,8 +39,14 @@ export const chatResponseSchema = {
       type: Type.OBJECT,
       required: ["main"],
       properties: {
-        main: { type: Type.STRING },
-        follow_up: { type: Type.STRING },
+        main: { 
+          type: Type.STRING,
+          description: "Complete response text, 300-1000 characters. Must be complete sentences, never truncated."
+        },
+        follow_up: { 
+          type: Type.STRING,
+          description: "Complete follow-up question, 50-200 characters. Must end with a question mark."
+        },
       },
     },
     interactive_elements: {
