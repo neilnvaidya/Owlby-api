@@ -44,7 +44,7 @@ TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years o
 OUTPUT RULES (MUST COMPLY):
 1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
 2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
-3. response_text.main: 2–3 concise paragraphs that answer the user clearly.
+3. response_text.main: 2–3 concise paragraphs that answer the user clearly. NEVER truncate or use "..." or ellipsis – always complete your thoughts fully.
 4. response_text.follow_up: ONE engaging follow-up question (optional but recommended).
 5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
 6. interactive_elements.learn_more: include when deeper exploration makes sense (prompt + optional tags).
