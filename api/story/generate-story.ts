@@ -9,25 +9,9 @@ import {
   createErrorResponse 
 } from '../../lib/api-handler';
 
-// Text truncation configuration
-const TEXT_TRUNCATION = {
-  MAX_TITLE_LENGTH: 100,
-  MAX_CONTENT_LENGTH: 2000,
-  MAX_CHARACTER_LENGTH: 50,
-  MAX_SETTING_LENGTH: 100,
-  MAX_MORAL_LENGTH: 200,
-} as const;
-
-/**
- * Truncate text to specified length with ellipsis
- */
-function truncateText(text: string, maxLength: number): string {
-  if (!text || text.length <= maxLength) return text;
-  return text.slice(0, maxLength - 3) + '...';
-}
-
 /**
  * Process the JSON response from story generation API
+ * No truncation applied - AI schema and instructions constrain output sizes appropriately
  */
 function processStoryResponse(responseText: string, prompt: string, gradeLevel: number) {
   try {
@@ -38,15 +22,11 @@ function processStoryResponse(responseText: string, prompt: string, gradeLevel: 
       return {
         prompt: prompt,
         gradeLevel: gradeLevel,
-        title: truncateText(story.title, TEXT_TRUNCATION.MAX_TITLE_LENGTH),
-        content: (story.content || []).map((paragraph: string) => 
-          truncateText(paragraph, TEXT_TRUNCATION.MAX_CONTENT_LENGTH)
-        ),
-        characters: (story.characters || []).map((character: string) => 
-          truncateText(character, TEXT_TRUNCATION.MAX_CHARACTER_LENGTH)
-        ),
-        setting: truncateText(story.setting || '', TEXT_TRUNCATION.MAX_SETTING_LENGTH),
-        moral: truncateText(story.moral || '', TEXT_TRUNCATION.MAX_MORAL_LENGTH),
+        title: story.title,
+        content: story.content || [],
+        characters: story.characters || [],
+        setting: story.setting || '',
+        moral: story.moral || '',
         tags: story.tags || story.requiredCategoryTags || [],
         timestamp: new Date().toISOString(),
         // Include normalized achievement tags
