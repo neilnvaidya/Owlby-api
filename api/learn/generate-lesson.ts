@@ -10,150 +10,41 @@ import {
 } from '../../lib/api-handler';
 
 /**
- * Attempt to repair truncated JSON by removing incomplete fields
- */
-function repairTruncatedJSON(jsonString: string): string {
-  // Remove trailing whitespace
-  let cleaned = jsonString.trim();
-  
-  // If it doesn't end with }, try to close it properly
-  if (!cleaned.endsWith('}')) {
-    // Find the last complete property
-    // Look for patterns like "key": "value" or "key": { ... }
-    // Remove anything after the last complete property
-    
-    // Try to find and remove incomplete visual object
-    const visualMatch = cleaned.match(/"visual"\s*:\s*\{[^}]*$/);
-    if (visualMatch) {
-      // Remove the incomplete visual field
-      cleaned = cleaned.substring(0, visualMatch.index);
-      // Remove trailing comma if present
-      cleaned = cleaned.replace(/,\s*$/, '');
-      // Close the lesson object
-      cleaned += '\n    }';
-    }
-    
-    // Close the root object if needed
-    if (!cleaned.endsWith('}')) {
-      cleaned += '\n  }';
-    }
-  }
-  
-  return cleaned;
-}
-
-/**
  * Process the JSON response from lesson generation API
- * Handles truncated responses from MAX_TOKENS by attempting to repair incomplete JSON
+ * No truncation applied - AI schema and instructions constrain output sizes appropriately
  */
-function processLessonResponse(responseText: string, topic: string, gradeLevel: number, rawResponse?: any) {
-  // Check if response was truncated
-  const wasTruncated = rawResponse?.candidates?.[0]?.finishReason === 'MAX_TOKENS';
-  
-  if (wasTruncated) {
-    console.warn('📚 [lesson] WARNING: Response was truncated (MAX_TOKENS). Attempting to repair JSON...');
-    console.warn('📚 [lesson] Response length:', responseText.length);
-    console.warn('📚 [lesson] Last 200 chars:', responseText.slice(-200));
-  }
-  
-  let jsonResponse: any;
-  let parseAttempts = 0;
-  
+function processLessonResponse(responseText: string, topic: string, gradeLevel: number) {
   try {
-    // First attempt: direct parse
-    jsonResponse = JSON.parse(responseText);
-    parseAttempts = 1;
-  } catch (parseError: any) {
-    console.warn('📚 [lesson] Initial JSON parse failed:', {
-      error: parseError.message,
-      position: parseError.message.match(/position (\d+)/)?.[1],
-      responseLength: responseText.length
-    });
+    const jsonResponse = JSON.parse(responseText);
     
-    if (wasTruncated) {
-      // Try to repair truncated JSON
-      try {
-        const repaired = repairTruncatedJSON(responseText);
-        console.info('📚 [lesson] Attempting to parse repaired JSON...');
-        console.info('📚 [lesson] Repaired JSON length:', repaired.length);
-        console.info('📚 [lesson] Repaired JSON last 200 chars:', repaired.slice(-200));
-        
-        jsonResponse = JSON.parse(repaired);
-        parseAttempts = 2;
-        console.info('📚 [lesson] Successfully parsed repaired JSON');
-      } catch (repairError: any) {
-        console.error('📚 [lesson] Failed to repair JSON:', {
-          error: repairError.message,
-          position: repairError.message.match(/position (\d+)/)?.[1]
-        });
-        
-        // Last resort: try to extract what we can using regex
-        try {
-          const titleMatch = responseText.match(/"title"\s*:\s*"([^"]+)"/);
-          const introMatch = responseText.match(/"introduction"\s*:\s*"([^"]+)"/);
-          const bodyMatch = responseText.match(/"body"\s*:\s*\[([^\]]+)\]/);
-          const conclusionMatch = responseText.match(/"conclusion"\s*:\s*"([^"]+)"/);
-          
-          if (titleMatch || introMatch) {
-            console.warn('📚 [lesson] Attempting partial extraction from truncated JSON');
-            // Create a minimal valid structure
-            jsonResponse = {
-              lesson: {
-                title: titleMatch?.[1] || 'Lesson',
-                introduction: introMatch?.[1] || 'This lesson was truncated.',
-                body: bodyMatch ? bodyMatch[1].split(',').map((s: string) => s.trim().replace(/^"|"$/g, '')) : ['Content was truncated due to length limits.'],
-                conclusion: conclusionMatch?.[1] || 'This lesson was incomplete.',
-                keyPoints: [],
-                keywords: [],
-                challengeQuiz: [],
-                difficulty: 10
-              }
-            };
-            parseAttempts = 3;
-          } else {
-            throw repairError;
-          }
-        } catch (extractError) {
-          console.error('📚 [lesson] All JSON parsing attempts failed');
-          throw new Error(`Failed to parse lesson JSON: Response was truncated and could not be repaired. Original error: ${parseError.message}`);
-        }
-      }
+    if (jsonResponse.lesson) {
+      const lesson = jsonResponse.lesson;
+      return {
+        topic: topic,
+        gradeLevel: gradeLevel,
+        title: lesson.title,
+        introduction: lesson.introduction.replace(/\\n/g, '\n'),
+        body: (lesson.body || []).map((p: string) => p.replace(/\\n/g, '\n')),
+        conclusion: lesson.conclusion,
+        keyPoints: lesson.keyPoints || [],
+        keywords: lesson.keywords || [],
+        challengeQuiz: {
+          questions: lesson.challengeQuiz || []
+        },
+        tags: lesson.tags || [],
+        difficulty: lesson.difficulty ?? 10,
+        // Optional CSS-based visual representation, passed through for clients that support it
+        visual: lesson.visual || null,
+        // Include normalized achievement tags
+        requiredCategoryTags: lesson.requiredCategoryTags || [],
+        optionalTags: lesson.optionalTags || []
+      };
     } else {
-      // Not truncated, so this is a real parsing error
-      throw new Error(`Failed to parse lesson JSON: ${parseError.message}`);
+      throw new Error('Invalid lesson JSON structure');
     }
-  }
-  
-  if (jsonResponse.lesson) {
-    const lesson = jsonResponse.lesson;
-    
-    // Log if we had to repair
-    if (parseAttempts > 1) {
-      console.warn('📚 [lesson] Used repaired/partial JSON. Some fields may be missing.');
-    }
-    
-    return {
-      topic: topic,
-      gradeLevel: gradeLevel,
-      title: lesson.title || 'Lesson',
-      introduction: (lesson.introduction || '').replace(/\\n/g, '\n'),
-      body: (lesson.body || []).map((p: string) => String(p).replace(/\\n/g, '\n')),
-      conclusion: lesson.conclusion || '',
-      keyPoints: lesson.keyPoints || [],
-      keywords: lesson.keywords || [],
-      challengeQuiz: {
-        questions: lesson.challengeQuiz || []
-      },
-      tags: lesson.tags || [],
-      difficulty: lesson.difficulty ?? 10,
-      // Optional CSS-based visual representation - set to null if incomplete
-      visual: (lesson.visual && lesson.visual.type && lesson.visual.title) ? lesson.visual : null,
-      // Include normalized achievement tags
-      requiredCategoryTags: lesson.requiredCategoryTags || [],
-      optionalTags: lesson.optionalTags || []
-    };
-  } else {
-    throw new Error('Invalid lesson JSON structure: missing "lesson" key');
+  } catch (error) {
+    console.error('Failed to parse lesson JSON response:', error);
+    throw new Error(`Failed to generate lesson: Invalid response format. Please try again.`);
   }
 }
 
@@ -194,8 +85,8 @@ export default async function handler(req: any, res: any) {
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel);
 
-    // Build AI configuration with higher token limit for lessons (they can be longer)
-    const config = buildAIConfig(lessonResponseSchema, systemInstructions, 8192); // Increased from default 4096
+    // Build AI configuration
+    const config = buildAIConfig(lessonResponseSchema, systemInstructions);
     
     // Create contents for AI request
     const userPrompt = `topic = ${topic}, grade ${gradeLevel}, age ${gradeLevel + 5}`;
@@ -224,15 +115,8 @@ export default async function handler(req: any, res: any) {
     // Log full raw response
     console.info('🔍 [lesson] FULL RAW RESPONSE OBJECT:', JSON.stringify(rawResponse, null, 2));
     
-    // Check for truncation
-    const finishReason = rawResponse?.candidates?.[0]?.finishReason;
-    if (finishReason === 'MAX_TOKENS') {
-      console.warn('📚 [lesson] WARNING: Response was truncated due to MAX_TOKENS limit');
-      console.warn('📚 [lesson] Consider reducing maxOutputTokens or simplifying the lesson schema');
-    }
-    
-    // Process the lesson response (pass rawResponse for truncation detection)
-    const processedResponse = processLessonResponse(responseText, topic, gradeLevel, rawResponse);
+    // Process the lesson response
+    const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
     
     // Normalize achievement tags
     normalizeAchievementTags(processedResponse);
