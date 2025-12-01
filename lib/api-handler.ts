@@ -32,15 +32,26 @@ export function handleCORS(req: any, res: any): boolean {
 
 /**
  * Standard AI request processing
+ * Handles non-text parts (like thoughtSignature) and extracts all text parts correctly
  */
 export async function processAIRequest(
   config: any,
   contents: any[],
   endpoint: string,
   inputText: string
-): Promise<{ responseText: string; usageMetadata: any }> {
+): Promise<{ responseText: string; usageMetadata: any; rawResponse: any }> {
+  const requestStartTime = Date.now();
+  
   try {
     console.info(`🦉 [${endpoint}] → Gemini: input len=${inputText.length}`);
+    console.info(`🦉 [${endpoint}] REQUEST CONFIG:`, JSON.stringify({
+      model: MODEL_NAME,
+      maxOutputTokens: config.maxOutputTokens,
+      hasResponseSchema: !!config.responseSchema,
+      hasSystemInstruction: !!config.systemInstruction,
+      hasThinkingConfig: !!config.thinkingConfig,
+      thinkingConfig: config.thinkingConfig
+    }, null, 2));
     
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
@@ -48,31 +59,142 @@ export async function processAIRequest(
       contents,
     });
 
-    const responseText = response.text || (
-      Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
-        ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
-        : ''
-    );
+    const requestDuration = Date.now() - requestStartTime;
+    
+    // Log FULL RAW RESPONSE for debugging
+    console.info(`🔍 [${endpoint}] FULL RAW RESPONSE:`, JSON.stringify(response, null, 2));
+    
+    // Extract all parts from the response
+    let responseText = '';
+    const allParts: any[] = [];
+    const nonTextParts: any[] = [];
+    
+    if (response.text) {
+      // Direct text property available
+      responseText = response.text;
+      allParts.push({ type: 'text', content: responseText });
+    } else if (Array.isArray((response as any).candidates) && (response as any).candidates.length > 0) {
+      const candidate = (response as any).candidates[0];
+      const parts = candidate.content?.parts || [];
+      
+      // Process all parts - separate text and non-text
+      for (const part of parts) {
+        if (part.text) {
+          responseText += part.text;
+          allParts.push({ type: 'text', content: part.text });
+        } else {
+          // Non-text part (e.g., thoughtSignature, functionCall, etc.)
+          nonTextParts.push(part);
+          allParts.push({ 
+            type: 'non-text', 
+            partType: Object.keys(part)[0] || 'unknown',
+            content: part 
+          });
+        }
+      }
+    }
+
+    // Log detailed part analysis
+    console.info(`🔍 [${endpoint}] RESPONSE PARTS ANALYSIS:`, {
+      totalParts: allParts.length,
+      textParts: allParts.filter(p => p.type === 'text').length,
+      nonTextParts: nonTextParts.length,
+      nonTextPartTypes: nonTextParts.map(p => p.partType),
+      responseTextLength: responseText.length
+    });
+    
+    if (nonTextParts.length > 0) {
+      console.warn(`⚠️ [${endpoint}] NON-TEXT PARTS DETECTED:`, JSON.stringify(nonTextParts, null, 2));
+      console.warn(`⚠️ [${endpoint}] Returning concatenation of all text parts. Please refer to the non-text parts for a full response from model.`);
+    }
 
     if (!responseText) {
-      console.warn(`[${endpoint}] Gemini returned empty text – full response follows`);
-      console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
+      console.error(`❌ [${endpoint}] Gemini returned empty text – full response follows`);
+      console.error(`❌ [${endpoint}] FULL RESPONSE:`, JSON.stringify(response, null, 2));
+      console.error(`❌ [${endpoint}] ALL PARTS:`, JSON.stringify(allParts, null, 2));
       throw new Error('Empty response from AI service');
     }
 
-    console.info(`🦉 [${endpoint}] ← Gemini: response len=${responseText.length}`);
-    console.debug(`🦉 [${endpoint}] Response preview:`, responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
-
-    // Log token usage for cost analysis
-    logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
+    // Extract usage metadata with detailed breakdown
+    const usageMetadata = response.usageMetadata || {};
+    const candidatesMetadata = (response as any).candidates?.[0]?.usageMetadata || {};
+    
+    // Log comprehensive response details
+    console.info(`🦉 [${endpoint}] ← Gemini: response len=${responseText.length} (${requestDuration}ms)`);
+    console.info(`🔍 [${endpoint}] RESPONSE DETAILS:`, {
+      responseTextLength: responseText.length,
+      responseTextPreview: responseText.slice(0, 200) + (responseText.length > 200 ? '...' : ''),
+      requestDurationMs: requestDuration,
+      hasNonTextParts: nonTextParts.length > 0
+    });
+    
+    // Log token usage with full details
+    const fullUsageMetadata = {
+      ...usageMetadata,
+      ...candidatesMetadata,
+      // Extract thinking tokens if available
+      thinkingTokens: (response as any).candidates?.[0]?.usageMetadata?.thinkingTokenCount || 
+                      usageMetadata.thoughtsTokenCount || 
+                      (usageMetadata.totalTokenCount && usageMetadata.promptTokenCount && usageMetadata.candidatesTokenCount
+                        ? usageMetadata.totalTokenCount - usageMetadata.promptTokenCount - usageMetadata.candidatesTokenCount
+                        : null)
+    };
+    
+    logTokenUsage(endpoint, inputText, responseText, fullUsageMetadata);
+    
+    // Log full usage metadata
+    console.info(`💰 [${endpoint}] FULL USAGE METADATA:`, JSON.stringify(fullUsageMetadata, null, 2));
+    
+    // Log cost breakdown
+    const inputTokens = fullUsageMetadata.promptTokenCount || 0;
+    const outputTokens = fullUsageMetadata.candidatesTokenCount || 0;
+    const thinkingTokens = fullUsageMetadata.thinkingTokens || 0;
+    const totalTokens = fullUsageMetadata.totalTokenCount || (inputTokens + outputTokens + thinkingTokens);
+    
+    // Pricing (update as needed)
+    const inputPricePer1M = 0.30;
+    const outputPricePer1M = 2.50;
+    const thinkingPricePer1M = 0.30; // Assuming same as input
+    
+    const inputCost = (inputTokens / 1_000_000) * inputPricePer1M;
+    const outputCost = (outputTokens / 1_000_000) * outputPricePer1M;
+    const thinkingCost = (thinkingTokens / 1_000_000) * thinkingPricePer1M;
+    const totalCost = inputCost + outputCost + thinkingCost;
+    
+    console.info(`💰 [${endpoint}] COST BREAKDOWN:`, {
+      tokens: {
+        input: inputTokens,
+        output: outputTokens,
+        thinking: thinkingTokens,
+        total: totalTokens
+      },
+      cost: {
+        input: `$${inputCost.toFixed(6)}`,
+        output: `$${outputCost.toFixed(6)}`,
+        thinking: `$${thinkingCost.toFixed(6)}`,
+        total: `$${totalCost.toFixed(6)}`
+      },
+      rates: {
+        input: `$${inputPricePer1M}/1M tokens`,
+        output: `$${outputPricePer1M}/1M tokens`,
+        thinking: `$${thinkingPricePer1M}/1M tokens`
+      }
+    });
 
     return {
       responseText,
-      usageMetadata: response.usageMetadata
+      usageMetadata: fullUsageMetadata,
+      rawResponse: response
     };
 
   } catch (error: any) {
-    console.error(`❌ [${endpoint}] AI Error:`, error);
+    const requestDuration = Date.now() - requestStartTime;
+    console.error(`❌ [${endpoint}] AI Error (${requestDuration}ms):`, error);
+    console.error(`❌ [${endpoint}] Error details:`, {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     
     // Handle specific error types
     if (error.message && error.message.includes('User location is not supported')) {

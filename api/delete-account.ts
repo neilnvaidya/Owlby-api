@@ -9,8 +9,18 @@ const AUTH0_CLIENT_SECRET = process.env.AUTH0_CLIENT_SECRET || '';
 const AUTH0_MANAGEMENT_AUDIENCE = `https://${AUTH0_DOMAIN}/api/v2/`;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const startTime = Date.now();
+  
+  console.info('🗑️ [delete-account] ========== REQUEST START ==========');
+  console.info('🗑️ [delete-account] REQUEST:', JSON.stringify({
+    method: req.method,
+    url: req.url,
+    hasAuthHeader: !!req.headers.authorization
+  }, null, 2));
+  
   // Only allow DELETE method
   if (req.method !== 'DELETE') {
+    console.warn('🗑️ [delete-account] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -19,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const token = authHeader.replace('Bearer ', '');
   
   if (!token) {
+    console.warn('🗑️ [delete-account] Missing or invalid token');
     return res.status(401).json({ error: 'Missing or invalid token' });
   }
   
@@ -27,7 +38,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const decoded: any = await verifyToken(token);
     const auth0UserId = decoded.sub;
     
-    console.log('Starting account deletion for user:', auth0UserId);
+    console.info('🗑️ [delete-account] User authenticated:', {
+      userId: auth0UserId?.substring(0, 8) + '...',
+      email: decoded.email
+    });
+    console.info('🗑️ [delete-account] Starting account deletion for user:', auth0UserId.substring(0, 8) + '...');
     
     // Step 1: Delete user from Supabase
     try {
@@ -37,21 +52,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .eq('auth0_id', auth0UserId);
       
       if (supabaseError) {
-        console.error('Supabase deletion error:', supabaseError);
+        console.error('🗑️ [delete-account] Supabase deletion error:', supabaseError);
         // Continue with Auth0 deletion even if Supabase fails
       } else {
-        console.log('Successfully deleted user from Supabase');
+        console.info('🗑️ [delete-account] Successfully deleted user from Supabase');
       }
     } catch (supabaseError) {
-      console.error('Supabase deletion failed:', supabaseError);
+      console.error('🗑️ [delete-account] Supabase deletion failed:', {
+        error: supabaseError instanceof Error ? supabaseError.message : 'Unknown error',
+        stack: supabaseError instanceof Error ? supabaseError.stack : undefined
+      });
       // Continue with Auth0 deletion even if Supabase fails
     }
     
     // Step 2: Delete user from Auth0
     try {
+      console.info('🗑️ [delete-account] Getting Auth0 Management API token');
       // Get Auth0 Management API access token
       const managementToken = await getAuth0ManagementToken();
       
+      console.info('🗑️ [delete-account] Deleting user from Auth0');
       // Delete user from Auth0
       const deleteResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`, {
         method: 'DELETE',
@@ -63,27 +83,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (!deleteResponse.ok) {
         const errorText = await deleteResponse.text();
-        console.error('Auth0 deletion error:', deleteResponse.status, errorText);
+        console.error('🗑️ [delete-account] Auth0 deletion error:', {
+          status: deleteResponse.status,
+          statusText: deleteResponse.statusText,
+          errorText
+        });
         throw new Error(`Auth0 deletion failed: ${deleteResponse.status}`);
       }
       
-      console.log('Successfully deleted user from Auth0');
+      console.info('🗑️ [delete-account] Successfully deleted user from Auth0');
     } catch (auth0Error) {
-      console.error('Auth0 deletion failed:', auth0Error);
+      const totalMs = Date.now() - startTime;
+      console.error('🗑️ [delete-account] ========== REQUEST ERROR ==========');
+      console.error('🗑️ [delete-account] Auth0 deletion failed:', {
+        error: auth0Error instanceof Error ? auth0Error.message : 'Unknown error',
+        stack: auth0Error instanceof Error ? auth0Error.stack : undefined,
+        duration: totalMs
+      });
       return res.status(500).json({ 
         error: 'Failed to delete account from authentication system',
         details: auth0Error instanceof Error ? auth0Error.message : 'Unknown error'
       });
     }
     
-    console.log('Account deletion completed successfully for user:', auth0UserId);
-    return res.status(200).json({ 
+    const totalMs = Date.now() - startTime;
+    console.info('🗑️ [delete-account] ========== REQUEST COMPLETE ==========');
+    console.info(`🗑️ [delete-account] Account deletion completed successfully for user: ${auth0UserId.substring(0, 8)}... (${totalMs}ms)`);
+    
+    const response = { 
       success: true, 
       message: 'Account successfully deleted' 
-    });
+    };
+    console.info('🗑️ [delete-account] FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
+    
+    return res.status(200).json(response);
     
   } catch (error) {
-    console.error('Account deletion error:', error);
+    const totalMs = Date.now() - startTime;
+    console.error('🗑️ [delete-account] ========== REQUEST ERROR ==========');
+    console.error('🗑️ [delete-account] Account deletion error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration: totalMs
+    });
     return res.status(500).json({ 
       error: 'Failed to delete account',
       details: error instanceof Error ? error.message : 'Unknown error'

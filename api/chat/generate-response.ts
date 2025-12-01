@@ -113,7 +113,19 @@ export default async function handler(req: any, res: any) {
       ? (messages[0].text?.slice(0, 60) + (messages[0].text?.length > 60 ? '…' : '')) 
       : '';
     
+    console.info(`🦉 [chat] ========== REQUEST START ==========`);
     console.info(`🦉 [chat] req chatId=${chatId} turns=${messages?.length ?? 0} firstPrompt="${previewMsg}"`);
+    console.info(`🦉 [chat] REQUEST BODY:`, JSON.stringify({
+      chatId,
+      gradeLevel,
+      userId: userId?.substring(0, 8) + '...',
+      messageCount: messages?.length,
+      messages: messages?.map((m: any) => ({
+        role: m.role,
+        textLength: m.text?.length,
+        textPreview: m.text?.slice(0, 100)
+      }))
+    }, null, 2));
 
     // Build system instructions using existing utility
     const recentContext = messages
@@ -135,13 +147,16 @@ export default async function handler(req: any, res: any) {
       },
     ];
 
+    console.info(`🦉 [chat] SYSTEM INSTRUCTIONS LENGTH:`, systemInstructions.length);
+    console.info(`🦉 [chat] LAST USER MESSAGE:`, lastUserMessage);
+
     let processedResponse: any;
 
     try {
       const aiStart = Date.now();
       
       // Process AI request using centralized handler
-      const { responseText, usageMetadata } = await processAIRequest(
+      const { responseText, usageMetadata, rawResponse } = await processAIRequest(
         config, 
         contents, 
         'chat', 
@@ -150,11 +165,17 @@ export default async function handler(req: any, res: any) {
       
       aiDurationMs = Date.now() - aiStart;
       
+      // Log full raw response
+      console.info(`🔍 [chat] FULL RAW RESPONSE OBJECT:`, JSON.stringify(rawResponse, null, 2));
+      
       // Process complete response
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
       
       // Normalize achievement tags
       normalizeAchievementTags(processedResponse);
+
+      // Log processed response
+      console.info(`🔍 [chat] PROCESSED RESPONSE:`, JSON.stringify(processedResponse, null, 2));
 
       if (ENABLE_API_LOGGING) {
         logChatCall({
@@ -213,6 +234,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const totalMs = Date.now() - startTime;
+    console.info(`✅ [chat] ========== REQUEST COMPLETE ==========`);
     console.info(`✅ [chat] done chatId=${chatId} ok=${processedResponse?.success ?? true} total=${totalMs}ms (AI ${aiDurationMs}ms)`);
     
     // Log full response being sent to client (for debugging truncation issues)
@@ -221,6 +243,7 @@ export default async function handler(req: any, res: any) {
     console.info(`📤 [chat] SENDING response: main=${mainTextLen} chars, follow_up=${followUpLen} chars`);
     console.info(`📤 [chat] FULL_MAIN_TEXT:`, processedResponse?.response_text?.main);
     console.info(`📤 [chat] FULL_FOLLOW_UP:`, processedResponse?.response_text?.follow_up);
+    console.info(`📤 [chat] FULL RESPONSE BEING SENT:`, JSON.stringify(processedResponse, null, 2));
     
     if (ENABLE_API_LOGGING) {
       await flushApiLogger();

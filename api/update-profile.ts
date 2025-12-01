@@ -9,7 +9,18 @@ import { verifyToken } from '../lib/auth';
  * Specifically designed for the onboarding flow where we collect age/grade data
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const startTime = Date.now();
+  
+  console.info('📝 [update-profile] ========== REQUEST START ==========');
+  console.info('📝 [update-profile] REQUEST:', JSON.stringify({
+    method: req.method,
+    url: req.url,
+    hasAuthHeader: !!req.headers.authorization,
+    bodyKeys: req.body ? Object.keys(req.body) : []
+  }, null, 2));
+  
   if (req.method !== 'POST') {
+    console.warn('📝 [update-profile] Method not allowed:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -18,12 +29,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
     
-    console.info('📝 Onboarding profile update request:', { 
+    console.info('📝 [update-profile] Onboarding profile update request:', { 
       name: name?.slice(0, 10) + '...', 
       age, 
       userId: userId?.slice(0, 15) + '...', 
       hasAuth: !!authHeader 
     });
+    console.info('📝 [update-profile] REQUEST BODY:', JSON.stringify({
+      name: name?.slice(0, 20),
+      age,
+      userId: userId?.substring(0, 8) + '...'
+    }, null, 2));
     
     // Validate authorization
     if (!token) {
@@ -78,11 +94,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Use the existing profile update logic
-    const result = await updateOnboardingProfile(auth0UserId, decoded, onboardingData, res);
+    const result = await updateOnboardingProfile(auth0UserId, decoded, onboardingData, res, startTime);
     return result;
     
   } catch (error) {
-    console.error('❌ Onboarding profile update error:', error);
+    const totalMs = Date.now() - startTime;
+    console.error('📝 [update-profile] ========== REQUEST ERROR ==========');
+    console.error('📝 [update-profile] Onboarding profile update error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration: totalMs
+    });
     return res.status(500).json({
       error: 'server_error',
       message: 'Failed to update onboarding profile'
@@ -98,9 +120,11 @@ async function updateOnboardingProfile(
   auth0UserId: string, 
   decoded: any, 
   onboardingData: any, 
-  res: VercelResponse
+  res: VercelResponse,
+  startTime: number
 ) {
   try {
+    console.info('📝 [update-profile] Checking if user exists in Supabase');
     // Check if user exists in Supabase
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
@@ -109,6 +133,7 @@ async function updateOnboardingProfile(
       .single();
     
     if (checkError && checkError.code !== 'PGRST116') {
+      console.error('📝 [update-profile] Error checking existing user:', checkError);
       throw checkError;
     }
     
@@ -120,9 +145,14 @@ async function updateOnboardingProfile(
       last_login_at: new Date().toISOString()
     };
 
+    console.info('📝 [update-profile] Prepared user data:', JSON.stringify({
+      ...userData,
+      achievements: Array.isArray(userData.achievements) ? `[${userData.achievements.length} items]` : userData.achievements
+    }, null, 2));
+
     if (existingUser) {
       // Update existing user with onboarding data
-      console.info('📝 Updating existing user with onboarding data:', auth0UserId);
+      console.info('📝 [update-profile] Updating existing user with onboarding data:', auth0UserId.substring(0, 8) + '...');
       
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
@@ -131,9 +161,12 @@ async function updateOnboardingProfile(
         .select()
         .single();
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('📝 [update-profile] Error updating user:', updateError);
+        throw updateError;
+      }
       
-      console.info('✅ User profile updated successfully with onboarding data');
+      console.info('📝 [update-profile] User profile updated successfully with onboarding data');
       
       // Return updated profile
       const profile = {
@@ -147,21 +180,28 @@ async function updateOnboardingProfile(
         parent_email: updatedUser.parent_email || undefined,
       };
       
-      return res.status(200).json({
-      success: true,
+      const totalMs = Date.now() - startTime;
+      const response = {
+        success: true,
         message: 'Onboarding profile updated successfully',
         profile: profile,
-      data: { 
+        data: { 
           userId: auth0UserId,
           name: userData.name,
           grade_level: userData.grade_level,
-        updatedAt: new Date().toISOString()
-      }
-    });
+          updatedAt: new Date().toISOString()
+        }
+      };
+      
+      console.info('📝 [update-profile] ========== REQUEST COMPLETE ==========');
+      console.info(`📝 [update-profile] Total time: ${totalMs}ms`);
+      console.info('📝 [update-profile] FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
+      
+      return res.status(200).json(response);
     
     } else {
       // Create new user with onboarding data
-      console.info('👤 Creating new user with onboarding data:', auth0UserId);
+      console.info('📝 [update-profile] Creating new user with onboarding data:', auth0UserId.substring(0, 8) + '...');
       
       const { data: newUser, error: insertError } = await supabase
         .from('users')
@@ -175,9 +215,12 @@ async function updateOnboardingProfile(
         .select()
         .single();
       
-      if (insertError) throw insertError;
+      if (insertError) {
+        console.error('📝 [update-profile] Error creating user:', insertError);
+        throw insertError;
+      }
       
-      console.info('✅ New user created successfully with onboarding data');
+      console.info('📝 [update-profile] New user created successfully with onboarding data');
       
       // Return new profile
       const profile = {
@@ -191,7 +234,8 @@ async function updateOnboardingProfile(
         parent_email: newUser.parent_email || undefined,
       };
       
-      return res.status(201).json({
+      const totalMs = Date.now() - startTime;
+      const response = {
         success: true,
         message: 'Onboarding profile created successfully',
         profile: profile,
@@ -201,10 +245,22 @@ async function updateOnboardingProfile(
           grade_level: userData.grade_level,
           createdAt: new Date().toISOString()
         }
-      });
+      };
+      
+      console.info('📝 [update-profile] ========== REQUEST COMPLETE ==========');
+      console.info(`📝 [update-profile] Total time: ${totalMs}ms`);
+      console.info('📝 [update-profile] FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
+      
+      return res.status(201).json(response);
     }
   } catch (error) {
-    console.error('❌ Onboarding profile update error:', error);
+    const totalMs = Date.now() - startTime;
+    console.error('📝 [update-profile] ========== REQUEST ERROR ==========');
+    console.error('📝 [update-profile] Onboarding profile update error:', {
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      duration: totalMs
+    });
     return res.status(500).json({ 
       error: 'Failed to update onboarding profile',
       details: error instanceof Error ? error.message : 'Unknown error'

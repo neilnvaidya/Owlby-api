@@ -55,6 +55,8 @@ export interface AchievementData {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const startTime = Date.now();
+  
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -64,11 +66,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  console.info('🏆 [achievements] ========== REQUEST START ==========');
+  console.info('🏆 [achievements] REQUEST:', JSON.stringify({
+    method: req.method,
+    url: req.url,
+    hasAuthHeader: !!req.headers.authorization,
+    bodyKeys: req.body ? Object.keys(req.body) : []
+  }, null, 2));
+
   try {
     // Authenticate user
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      console.warn('Achievements sync: No valid authorization header', { 
+      console.warn('🏆 [achievements] No valid authorization header', { 
         method: req.method,
         url: req.url
       });
@@ -82,8 +92,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let user;
     try {
       user = await verifyToken(token);
+      console.info('🏆 [achievements] User authenticated:', {
+        userId: user.sub?.substring(0, 8) + '...',
+        email: user.email
+      });
     } catch (error) {
-      console.warn('Achievements sync: Token verification failed', { 
+      console.warn('🏆 [achievements] Token verification failed', { 
         error: error instanceof Error ? error.message : 'Unknown error',
         method: req.method,
         url: req.url
@@ -94,28 +108,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    console.log('Achievement sync request', {
-      userId: user.sub,
+    console.info('🏆 [achievements] Achievement sync request', {
+      userId: user.sub?.substring(0, 8) + '...',
       method: req.method,
     });
 
+    let result;
     switch (req.method) {
       case 'GET':
-        return handleGetAchievements(req, res, user.sub);
+        result = await handleGetAchievements(req, res, user.sub);
+        break;
       case 'POST':
-        return handleSyncAchievements(req, res, user.sub, user);
+        console.info('🏆 [achievements] REQUEST BODY:', JSON.stringify(req.body, null, 2));
+        result = await handleSyncAchievements(req, res, user.sub, user);
+        break;
       default:
-        return res.status(405).json({ 
+        result = res.status(405).json({ 
           success: false, 
           error: 'Method not allowed' 
         });
     }
+    
+    const totalMs = Date.now() - startTime;
+    console.info('🏆 [achievements] ========== REQUEST COMPLETE ==========');
+    console.info(`🏆 [achievements] Total time: ${totalMs}ms`);
+    
+    return result;
   } catch (error) {
-    console.error('Achievement sync error', { 
+    const totalMs = Date.now() - startTime;
+    console.error('🏆 [achievements] ========== REQUEST ERROR ==========');
+    console.error('🏆 [achievements] Error:', { 
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
       method: req.method,
-      url: req.url
+      url: req.url,
+      duration: totalMs
     });
     
     return res.status(500).json({ 
@@ -127,6 +154,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 async function handleGetAchievements(req: VercelRequest, res: VercelResponse, userId: string) {
   try {
+    console.info('🏆 [achievements] GET: Fetching achievement data for user');
+    
     // Get user achievement data from database
     const { data: userData, error } = await supabase
       .from('users')
@@ -137,15 +166,24 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
     if (error) {
       if (error.code === 'PGRST116') {
         // User not found, return empty achievement data
-        console.log('User not found, returning empty achievements', { userId });
+        console.info('🏆 [achievements] GET: User not found, returning empty achievements', { 
+          userId: userId.substring(0, 8) + '...' 
+        });
         return res.status(200).json({
           success: true,
           data: null,
           message: 'No achievement data found'
         });
       }
+      console.error('🏆 [achievements] GET: Database error:', error);
       throw error;
     }
+
+    console.info('🏆 [achievements] GET: Raw user data from DB:', JSON.stringify({
+      hasAchievements: !!userData.achievements,
+      hasStats: !!userData.stats,
+      updatedAt: userData.updated_at
+    }, null, 2));
 
     // Parse achievement data
     const achievementData: AchievementData = {
@@ -180,11 +218,16 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
       lastSyncTime: userData.updated_at || new Date().toISOString(),
     };
 
-    console.log('Achievement data retrieved successfully', {
-      userId,
+    console.info('🏆 [achievements] GET: Achievement data retrieved successfully', {
+      userId: userId.substring(0, 8) + '...',
       totalStars: achievementData.starRepository.totalStars,
       unclaimedStars: achievementData.starRepository.unclaimedStars,
     });
+    
+    console.info('🏆 [achievements] GET: FULL RESPONSE BEING SENT:', JSON.stringify({
+      success: true,
+      data: achievementData
+    }, null, 2));
 
     return res.status(200).json({
       success: true,
@@ -192,9 +235,10 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
     });
 
   } catch (error) {
-    console.error('Error retrieving achievement data', {
+    console.error('🏆 [achievements] GET: Error retrieving achievement data', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      userId
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: userId.substring(0, 8) + '...'
     });
     throw error;
   }
@@ -202,9 +246,19 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
 
 async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, userId: string, user: any) {
   try {
+    console.info('🏆 [achievements] POST: Starting achievement sync');
     const achievementData = req.body as AchievementData;
 
+    console.info('🏆 [achievements] POST: Received achievement data:', JSON.stringify({
+      totalStars: achievementData?.starRepository?.totalStars,
+      unclaimedStars: achievementData?.starRepository?.unclaimedStars,
+      badgeProgressKeys: achievementData?.starRepository?.badgeProgress ? Object.keys(achievementData.starRepository.badgeProgress) : [],
+      starHistoryCount: achievementData?.starRepository?.starHistory?.length || 0,
+      pendingRewardsCount: achievementData?.starRepository?.pendingRewards?.length || 0
+    }, null, 2));
+
     if (!achievementData || !achievementData.starRepository) {
+      console.warn('🏆 [achievements] POST: Invalid achievement data provided');
       return res.status(400).json({
         success: false,
         error: 'Invalid achievement data provided'
@@ -240,6 +294,16 @@ async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, u
       last_activity_at: new Date().toISOString(),
     };
 
+    console.info('🏆 [achievements] POST: Prepared DB data:', JSON.stringify({
+      achievementDbData: {
+        totalStars: achievementDbData.totalStars,
+        unclaimedStars: achievementDbData.unclaimedStars,
+        badgeProgressKeys: Object.keys(achievementDbData.badgeProgress || {}),
+        starHistoryCount: achievementDbData.starHistory?.length || 0
+      },
+      statsDbData
+    }, null, 2));
+
     // Update user achievements and stats in database
     const { data, error } = await supabase
       .from('users')
@@ -258,28 +322,34 @@ async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, u
       .single();
 
     if (error) {
+      console.error('🏆 [achievements] POST: Database error:', error);
       throw error;
     }
 
-    console.log('Achievement data synced successfully', {
-      userId,
+    console.info('🏆 [achievements] POST: Achievement data synced successfully', {
+      userId: userId.substring(0, 8) + '...',
       totalStars: achievementData.starRepository.totalStars,
       unclaimedStars: achievementData.starRepository.unclaimedStars,
       syncTime: new Date().toISOString(),
     });
 
-    return res.status(200).json({
+    const response = {
       success: true,
       data: {
         syncTime: data.updated_at,
         message: 'Achievement data synced successfully'
       }
-    });
+    };
+    
+    console.info('🏆 [achievements] POST: FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
+
+    return res.status(200).json(response);
 
   } catch (error) {
-    console.error('Error syncing achievement data', {
+    console.error('🏆 [achievements] POST: Error syncing achievement data', {
       error: error instanceof Error ? error.message : 'Unknown error',
-      userId
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: userId.substring(0, 8) + '...'
     });
     throw error;
   }
