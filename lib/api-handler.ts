@@ -1,4 +1,4 @@
-import { CORS_HEADERS, ai, MODEL_NAME, FALLBACK_MODEL, buildAIConfig, logTokenUsage } from './ai-config';
+import { CORS_HEADERS, ai, MODEL_NAME, buildAIConfig, logTokenUsage } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
 
 /**
@@ -31,21 +31,19 @@ export function handleCORS(req: any, res: any): boolean {
 }
 
 /**
- * Standard AI request processing with automatic fallback on 503 errors
+ * Standard AI request processing
  * @param config - AI configuration object
  * @param contents - Message contents array
  * @param endpoint - Endpoint name for logging
  * @param inputText - Input text for logging
  * @param modelName - Optional model name override (uses MODEL_NAME if not provided)
- * @param isRetry - Internal flag to prevent infinite retry loops
  */
 export async function processAIRequest(
   config: any,
   contents: any[],
   endpoint: string,
   inputText: string,
-  modelName?: string,
-  isRetry: boolean = false
+  modelName?: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
   try {
     const activeModel = modelName || MODEL_NAME;
@@ -86,43 +84,6 @@ export async function processAIRequest(
     // Handle specific error types
     if (error.message && error.message.includes('User location is not supported')) {
       throw new Error('SERVICE_UNAVAILABLE_REGION');
-    }
-    
-    // Check for 503 Service Unavailable (model overloaded) and retry with fallback
-    // Handle various error formats from Google GenAI SDK
-    const errorStatus = error.status || error.code || error.error?.status || error.error?.code;
-    const errorMessage = error.message || error.error?.message || '';
-    const is503Error = errorStatus === 503 || 
-                      (errorMessage && (
-                        errorMessage.includes('503') || 
-                        errorMessage.includes('overloaded') ||
-                        errorMessage.includes('UNAVAILABLE') ||
-                        errorMessage.includes('Service Unavailable')
-                      ));
-    
-    if (is503Error && !isRetry) {
-      // Determine fallback model
-      let fallbackModel: string | undefined;
-      
-      if (modelName) {
-        // If a specific model was requested, try the default MODEL_NAME as fallback
-        fallbackModel = MODEL_NAME;
-        console.info(`🔄 [${endpoint}] Model ${modelName} overloaded, retrying with fallback: ${fallbackModel}`);
-      } else {
-        // If using default MODEL_NAME, try FALLBACK_MODEL
-        fallbackModel = FALLBACK_MODEL;
-        console.info(`🔄 [${endpoint}] Model ${MODEL_NAME} overloaded, retrying with fallback: ${fallbackModel}`);
-      }
-      
-      // Only retry if fallback is different from current model
-      if (fallbackModel && fallbackModel !== (modelName || MODEL_NAME)) {
-        try {
-          return await processAIRequest(config, contents, endpoint, inputText, fallbackModel, true);
-        } catch (fallbackError: any) {
-          console.error(`❌ [${endpoint}] Fallback model also failed:`, fallbackError);
-          // Continue to throw original error
-        }
-      }
     }
     
     throw new Error(`AI_PROCESSING_FAILED: ${error.message || 'Unknown error'}`);
