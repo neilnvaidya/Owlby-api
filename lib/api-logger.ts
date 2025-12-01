@@ -1,5 +1,6 @@
 // Owlby-api/lib/api-logger.ts
 import { createClient } from '@supabase/supabase-js';
+import { MODEL_NAME } from './ai-config';
 
 // Re-using the Supabase client from the web project for consistency
 // This assumes that environment variables SUPABASE_URL and SUPABASE_ANON_KEY are available
@@ -61,9 +62,11 @@ class APILoggingService {
   };
 
   // Gemini pricing per 1M tokens (update as needed)
+  // Keys should match model names when possible. Unknown models will fall back
+  // to 'gemini-2.5-flash' pricing.
   private readonly PRICING = {
     'gemini-2.5-flash': { input: 0.30, output: 2.50 }
-  };
+  } as const;
   
   constructor() {
     this.flushTimer = setInterval(() => this.flushToSupabase(), this.FLUSH_INTERVAL);
@@ -75,11 +78,14 @@ class APILoggingService {
 
   async logAPICall(data: APILogData): Promise<void> {
     try {
-      const modelName = 'gemini-2.5-flash';
+      const configuredModel = data.model || MODEL_NAME;
+      const pricingModel: keyof typeof this.PRICING = (configuredModel in this.PRICING
+        ? (configuredModel as keyof typeof this.PRICING)
+        : 'gemini-2.5-flash');
       const inputTokens = data.geminiUsageMetadata?.promptTokenCount || 0;
       const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0;
       const totalTokens = data.geminiUsageMetadata?.totalTokenCount || 0;
-      const exactCost = this.calculateCost(inputTokens, outputTokens, modelName);
+      const exactCost = this.calculateCost(inputTokens, outputTokens, pricingModel);
       
       // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs 
       console.info(`💰 [${data.route.toUpperCase()}] TOKEN USAGE & COST BREAKDOWN:`, {
@@ -111,18 +117,18 @@ class APILoggingService {
         
         // COST BREAKDOWN
         cost_breakdown: {
-          input_cost_usd: ((inputTokens / 1_000_000) * this.PRICING[modelName].input).toFixed(6),
-          output_cost_usd: ((outputTokens / 1_000_000) * this.PRICING[modelName].output).toFixed(6),
+          input_cost_usd: ((inputTokens / 1_000_000) * this.PRICING[pricingModel].input).toFixed(6),
+          output_cost_usd: ((outputTokens / 1_000_000) * this.PRICING[pricingModel].output).toFixed(6),
           total_cost_usd: exactCost.toFixed(6),
           cost_per_1k_tokens: totalTokens > 0 ? ((exactCost / totalTokens) * 1000).toFixed(6) : 'N/A'
         },
         
         // PRICING RATES USED
         pricing_rates: {
-          model: modelName,
-          input_rate_per_1m: `$${this.PRICING[modelName].input}`,
-          output_rate_per_1m: `$${this.PRICING[modelName].output}`,
-          output_multiplier: `${(this.PRICING[modelName].output / this.PRICING[modelName].input).toFixed(1)}x more than input`
+          model: pricingModel,
+          input_rate_per_1m: `$${this.PRICING[pricingModel].input}`,
+          output_rate_per_1m: `$${this.PRICING[pricingModel].output}`,
+          output_multiplier: `${(this.PRICING[pricingModel].output / this.PRICING[pricingModel].input).toFixed(1)}x more than input`
         },
         
         // RAW GEMINI METADATA
@@ -171,7 +177,7 @@ class APILoggingService {
   }
 
   private calculateCost(inputTokens: number, outputTokens: number, model: keyof typeof this.PRICING): number {
-    const rates = this.PRICING['gemini-2.5-flash'];
+    const rates = this.PRICING[model] || this.PRICING['gemini-2.5-flash'];
     const cost = ((inputTokens / 1_000_000) * rates.input) + ((outputTokens / 1_000_000) * rates.output);
     return cost;
   }

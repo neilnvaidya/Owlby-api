@@ -117,6 +117,33 @@ export const lessonResponseSchema = {
             }
           }
         },
+        // Optional CSS-based visual block for concepts that benefit from a simple diagram
+        visual: {
+          type: Type.OBJECT,
+          properties: {
+            type: { 
+              type: Type.STRING,
+              description: 'Visual type identifier',
+              enum: ['css-diagram'] as any
+            },
+            title: {
+              type: Type.STRING,
+              description: 'Short descriptive title for the visual'
+            },
+            description: {
+              type: Type.STRING,
+              description: 'Brief explanation of what the visual shows'
+            },
+            html: {
+              type: Type.STRING,
+              description: 'Minimal HTML structure for the diagram'
+            },
+            css: {
+              type: Type.STRING,
+              description: 'Minimal CSS needed to render the diagram (boxes, lines, simple layouts only)'
+            }
+          }
+        },
         ...ACHIEVEMENT_TAGS_SCHEMA,
       }
     }
