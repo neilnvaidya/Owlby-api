@@ -11,10 +11,16 @@ import {
 
 /**
  * Process the JSON response from story generation API
- * No truncation applied - AI schema and instructions constrain output sizes appropriately
+ * Handles truncated or malformed JSON gracefully
  */
 function processStoryResponse(responseText: string, prompt: string, gradeLevel: number) {
   try {
+    // Log the raw response for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[story] Raw response length:', responseText.length);
+      console.debug('[story] Raw response preview:', responseText.slice(0, 200));
+    }
+    
     const jsonResponse = JSON.parse(responseText);
     
     if (jsonResponse.story) {
@@ -36,8 +42,57 @@ function processStoryResponse(responseText: string, prompt: string, gradeLevel: 
     } else {
       throw new Error('Invalid story JSON structure');
     }
-  } catch (error) {
-    console.error('Failed to parse story JSON response:', error);
+  } catch (error: any) {
+    // Log the full response when parsing fails for debugging
+    console.error('❌ [story] Failed to parse JSON response');
+    console.error('❌ [story] Error:', error.message);
+    console.error('❌ [story] Response length:', responseText.length);
+    console.error('❌ [story] Response text (first 500 chars):', responseText.slice(0, 500));
+    console.error('❌ [story] Response text (last 200 chars):', responseText.slice(-200));
+    
+    // Try to repair truncated JSON
+    const jsonMatch = responseText.match(/\{[\s\S]*/);
+    if (jsonMatch) {
+      try {
+        let repairedJson = jsonMatch[0];
+        
+        // Close unclosed strings
+        const openQuotes = (repairedJson.match(/"/g) || []).length;
+        if (openQuotes % 2 !== 0) {
+          repairedJson = repairedJson.replace(/"([^"]*)$/, '"$1"');
+        }
+        
+        // Try to close the JSON object
+        const openBraces = (repairedJson.match(/\{/g) || []).length;
+        const closeBraces = (repairedJson.match(/\}/g) || []).length;
+        if (openBraces > closeBraces) {
+          repairedJson += '}'.repeat(openBraces - closeBraces);
+        }
+        
+        const repaired = JSON.parse(repairedJson);
+        if (repaired.story) {
+          console.info('✅ [story] Successfully repaired truncated JSON');
+          const story = repaired.story;
+          return {
+            prompt: prompt,
+            gradeLevel: gradeLevel,
+            title: story.title || 'Story',
+            content: story.content || [],
+            characters: story.characters || [],
+            setting: story.setting || '',
+            moral: story.moral || '',
+            tags: story.tags || story.requiredCategoryTags || [],
+            timestamp: new Date().toISOString(),
+            requiredCategoryTags: story.requiredCategoryTags || [],
+            optionalTags: story.optionalTags || []
+          };
+        }
+      } catch (repairError) {
+        console.error('❌ [story] JSON repair failed:', repairError);
+      }
+    }
+    
+    console.error('❌ [story] Could not parse or repair JSON response');
     throw new Error(`Failed to generate story: Invalid response format. Please try again.`);
   }
 }

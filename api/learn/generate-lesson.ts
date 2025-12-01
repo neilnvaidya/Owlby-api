@@ -11,10 +11,16 @@ import {
 
 /**
  * Process the JSON response from lesson generation API
- * No truncation applied - AI schema and instructions constrain output sizes appropriately
+ * Handles truncated or malformed JSON gracefully
  */
 function processLessonResponse(responseText: string, topic: string, gradeLevel: number) {
   try {
+    // Log the raw response for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[lesson] Raw response length:', responseText.length);
+      console.debug('[lesson] Raw response preview:', responseText.slice(0, 200));
+    }
+    
     const jsonResponse = JSON.parse(responseText);
     
     if (jsonResponse.lesson) {
@@ -42,8 +48,64 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
     } else {
       throw new Error('Invalid lesson JSON structure');
     }
-  } catch (error) {
-    console.error('Failed to parse lesson JSON response:', error);
+  } catch (error: any) {
+    // Log the full response when parsing fails for debugging
+    console.error('❌ [lesson] Failed to parse JSON response');
+    console.error('❌ [lesson] Error:', error.message);
+    console.error('❌ [lesson] Response length:', responseText.length);
+    console.error('❌ [lesson] Response text (first 500 chars):', responseText.slice(0, 500));
+    console.error('❌ [lesson] Response text (last 200 chars):', responseText.slice(-200));
+    
+    // Try to repair truncated JSON
+    const jsonMatch = responseText.match(/\{[\s\S]*/);
+    if (jsonMatch) {
+      try {
+        let repairedJson = jsonMatch[0];
+        
+        // Close unclosed strings
+        const openQuotes = (repairedJson.match(/"/g) || []).length;
+        if (openQuotes % 2 !== 0) {
+          repairedJson = repairedJson.replace(/"([^"]*)$/, '"$1"');
+        }
+        
+        // Try to close the JSON object
+        const openBraces = (repairedJson.match(/\{/g) || []).length;
+        const closeBraces = (repairedJson.match(/\}/g) || []).length;
+        if (openBraces > closeBraces) {
+          // Add missing closing braces
+          repairedJson += '}'.repeat(openBraces - closeBraces);
+        }
+        
+        const repaired = JSON.parse(repairedJson);
+        if (repaired.lesson) {
+          console.info('✅ [lesson] Successfully repaired truncated JSON');
+          const lesson = repaired.lesson;
+          return {
+            topic: topic,
+            gradeLevel: gradeLevel,
+            title: lesson.title || 'Lesson',
+            introduction: (lesson.introduction || '').replace(/\\n/g, '\n'),
+            body: (lesson.body || []).map((p: string) => p.replace(/\\n/g, '\n')),
+            conclusion: lesson.conclusion || '',
+            keyPoints: lesson.keyPoints || [],
+            keywords: lesson.keywords || [],
+            challengeQuiz: {
+              questions: lesson.challengeQuiz || []
+            },
+            tags: lesson.tags || [],
+            difficulty: lesson.difficulty ?? 10,
+            visual: lesson.visual || null,
+            requiredCategoryTags: lesson.requiredCategoryTags || [],
+            optionalTags: lesson.optionalTags || []
+          };
+        }
+      } catch (repairError) {
+        // Repair failed, continue with error
+        console.error('❌ [lesson] JSON repair failed:', repairError);
+      }
+    }
+    
+    console.error('❌ [lesson] Could not parse or repair JSON response');
     throw new Error(`Failed to generate lesson: Invalid response format. Please try again.`);
   }
 }

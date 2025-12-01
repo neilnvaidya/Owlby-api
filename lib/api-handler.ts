@@ -57,11 +57,26 @@ export async function processAIRequest(
       contents,
     });
 
-    const responseText = response.text || (
-      Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
-        ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
-        : ''
-    );
+    // Extract text from response, handling thoughtSignature and other non-text parts
+    // Gemini 3 Pro models may include thoughtSignature parts which should be filtered out
+    let responseText = response.text;
+    
+    if (!responseText && Array.isArray((response as any).candidates) && (response as any).candidates.length > 0) {
+      const candidate = (response as any).candidates[0];
+      if (candidate.content?.parts) {
+        // Filter out non-text parts (like thoughtSignature) and only extract text parts
+        const textParts = candidate.content.parts
+          .filter((p: any) => p.text !== undefined && p.text !== null)
+          .map((p: any) => p.text);
+        responseText = textParts.join('') || '';
+        
+        // Log if we filtered out non-text parts
+        const nonTextParts = candidate.content.parts.filter((p: any) => !p.text);
+        if (nonTextParts.length > 0) {
+          console.info(`ℹ️ [${endpoint}] Filtered out ${nonTextParts.length} non-text parts (e.g., thoughtSignature)`);
+        }
+      }
+    }
 
     if (!responseText) {
       console.warn(`[${endpoint}] Gemini returned empty text – full response follows`);
