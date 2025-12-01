@@ -29,8 +29,6 @@ export interface FeedbackSubmission {
 }
 
 export default async function handler(req: any, res: any) {
-  const startTime = Date.now();
-  
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -45,13 +43,6 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  console.info('💬 [feedback] ========== REQUEST START ==========');
-  console.info('💬 [feedback] REQUEST:', JSON.stringify({
-    method: req.method,
-    hasAuthHeader: !!req.headers.authorization,
-    bodyKeys: req.body ? Object.keys(req.body) : []
-  }, null, 2));
-
   try {
     const {
       feedback_type,
@@ -62,22 +53,6 @@ export default async function handler(req: any, res: any) {
       contact_email,
       is_anonymous = false
     }: FeedbackSubmission = req.body;
-
-    console.info('💬 [feedback] REQUEST BODY:', JSON.stringify({
-      feedback_type,
-      category,
-      ratings,
-      text_responses: {
-        ...text_responses,
-        // Truncate long text for logging
-        what_you_like: text_responses.what_you_like?.substring(0, 200),
-        what_needs_improvement: text_responses.what_needs_improvement?.substring(0, 200),
-        feature_suggestions: text_responses.feature_suggestions?.substring(0, 200),
-        additional_comments: text_responses.additional_comments?.substring(0, 200)
-      },
-      context,
-      is_anonymous
-    }, null, 2));
 
     // Validate required fields
     if (!feedback_type || !context) {
@@ -137,17 +112,10 @@ export default async function handler(req: any, res: any) {
         const token = authHeader.replace('Bearer ', '');
         const decoded = await verifyToken(token);
         user_id = decoded.sub;
-        console.info('💬 [feedback] User authenticated:', {
-          userId: user_id?.substring(0, 8) + '...'
-        });
       } catch (error) {
         // If token is invalid, treat as anonymous feedback
-        console.warn('💬 [feedback] Invalid token for feedback submission, treating as anonymous', {
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        console.warn('Invalid token for feedback submission, treating as anonymous');
       }
-    } else {
-      console.info('💬 [feedback] Processing as anonymous feedback');
     }
 
     // Sanitize text inputs (prevent extremely long submissions)
@@ -188,15 +156,6 @@ export default async function handler(req: any, res: any) {
       created_at: new Date().toISOString()
     };
 
-    console.info('💬 [feedback] Prepared feedback data for DB:', JSON.stringify({
-      ...feedbackData,
-      // Truncate long text for logging
-      what_you_like: feedbackData.what_you_like?.substring(0, 200),
-      what_needs_improvement: feedbackData.what_needs_improvement?.substring(0, 200),
-      feature_suggestions: feedbackData.feature_suggestions?.substring(0, 200),
-      additional_comments: feedbackData.additional_comments?.substring(0, 200)
-    }, null, 2));
-
     // Insert into Supabase
     const { data, error } = await supabase
       .from('feedback')
@@ -205,37 +164,24 @@ export default async function handler(req: any, res: any) {
       .single();
 
     if (error) {
-      console.error('💬 [feedback] Database error inserting feedback:', error);
+      console.error('Database error inserting feedback:', error);
       return res.status(500).json({ 
         error: 'Failed to save feedback'
       });
     }
 
-    const totalMs = Date.now() - startTime;
-    const response = {
+    // Return success response
+    return res.status(201).json({
       success: true,
       message: 'Feedback submitted successfully',
       feedback_id: data.id,
       thank_you_message: feedback_type === 'bug_report' 
         ? 'Thank you for helping us improve Owlby! We\'ll look into this issue.'
         : 'Thank you for your feedback! It helps us make Owlby better for everyone.'
-    };
-
-    console.info('💬 [feedback] ========== REQUEST COMPLETE ==========');
-    console.info(`💬 [feedback] Total time: ${totalMs}ms`);
-    console.info('💬 [feedback] FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
-
-    // Return success response
-    return res.status(201).json(response);
+    });
 
   } catch (error) {
-    const totalMs = Date.now() - startTime;
-    console.error('💬 [feedback] ========== REQUEST ERROR ==========');
-    console.error('💬 [feedback] Feedback submission error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      duration: totalMs
-    });
+    console.error('Feedback submission error:', error);
     return res.status(500).json({ 
       error: 'Internal server error'
     });

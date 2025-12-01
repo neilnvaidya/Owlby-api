@@ -4,22 +4,11 @@ import { supabase } from '../lib/supabase';
 import { verifyToken } from '../lib/auth';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const startTime = Date.now();
-  
-  console.info('👤 [profile] ========== REQUEST START ==========');
-  console.info('👤 [profile] REQUEST:', JSON.stringify({
-    method: req.method,
-    url: req.url,
-    hasAuthHeader: !!req.headers.authorization,
-    bodyKeys: req.body ? Object.keys(req.body) : []
-  }, null, 2));
-  
   // Extract token from Authorization header
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '');
   
   if (!token) {
-    console.warn('👤 [profile] Missing or invalid token');
     return res.status(401).json({ error: 'Missing or invalid token' });
   }
   
@@ -28,38 +17,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const decoded: any = await verifyToken(token);
     const auth0UserId = decoded.sub;
     
-    console.info('👤 [profile] User authenticated:', {
-      userId: auth0UserId?.substring(0, 8) + '...',
-      email: decoded.email
-    });
-    
-    let result;
     // Handle different HTTP methods
     switch (req.method) {
       case 'GET':
-        result = await getProfile(auth0UserId, decoded, res);
-        break;
+        return await getProfile(auth0UserId, decoded, res);
       case 'POST':
-        console.info('👤 [profile] POST REQUEST BODY:', JSON.stringify(req.body, null, 2));
-        result = await updateProfile(auth0UserId, decoded, req.body, res);
-        break;
+        return await updateProfile(auth0UserId, decoded, req.body, res);
       default:
-        result = res.status(405).json({ error: 'Method not allowed' });
+        return res.status(405).json({ error: 'Method not allowed' });
     }
-    
-    const totalMs = Date.now() - startTime;
-    console.info('👤 [profile] ========== REQUEST COMPLETE ==========');
-    console.info(`👤 [profile] Total time: ${totalMs}ms`);
-    
-    return result;
   } catch (error) {
-    const totalMs = Date.now() - startTime;
-    console.error('👤 [profile] ========== REQUEST ERROR ==========');
-    console.error('👤 [profile] Profile API error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      duration: totalMs
-    });
+    console.error('Profile API error:', error);
     return res.status(401).json({ error: 'Authentication failed' });
   }
 }
@@ -67,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // GET profile handler
 async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse) {
   try {
-    console.info('👤 [profile] GET: Fetching profile for user:', auth0UserId.substring(0, 8) + '...');
+    console.log('Getting profile for user:', auth0UserId);
     
     // Check if user exists in database
     const { data: userData, error: userError } = await supabase
@@ -77,13 +45,13 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
       .single();
     
     if (userError && userError.code !== 'PGRST116') { // PGRST116 is "not found"
-      console.error('👤 [profile] GET: Supabase error getting user:', userError);
+      console.error('Supabase error getting user:', userError);
       throw userError;
     }
     
     // If user exists in database, return comprehensive profile
     if (userData) {
-      console.info('👤 [profile] GET: User found in database, building comprehensive profile');
+      console.log('User found in database, building comprehensive profile');
       
       const profile: UserProfile = {
         // Core identity
@@ -147,29 +115,19 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
         total_stories_generated: userData.total_stories_generated || 0,
       };
       
-      console.info('👤 [profile] GET: Returning comprehensive profile with', 
-        Array.isArray(profile.achievements) ? profile.achievements.length : 0, 'achievements');
-      console.info('👤 [profile] GET: FULL RESPONSE BEING SENT:', JSON.stringify({
-        ...profile,
-        achievements: Array.isArray(profile.achievements) ? `[${profile.achievements.length} items]` : profile.achievements
-      }, null, 2));
+      console.log('Returning comprehensive profile with', profile.achievements.length, 'achievements');
       return res.status(200).json(profile);
     }
     
     // If user doesn't exist yet, return null to indicate they need onboarding
-    console.info('👤 [profile] GET: User not found in database - needs onboarding');
-    const response = { 
+    console.log('User not found in database - needs onboarding');
+    return res.status(404).json({ 
       error: 'User profile not found',
       needsOnboarding: true 
-    };
-    console.info('👤 [profile] GET: FULL RESPONSE BEING SENT:', JSON.stringify(response, null, 2));
-    return res.status(404).json(response);
+    });
     
   } catch (error) {
-    console.error('👤 [profile] GET: Get profile error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error('Get profile error:', error);
     return res.status(500).json({ error: 'Failed to get user profile' });
   }
 }
@@ -177,9 +135,9 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
 // POST profile update handler
 async function updateProfile(auth0UserId: string, decoded: any, updateData: ProfileUpdateRequest, res: VercelResponse) {
   try {
-    console.info('👤 [profile] POST: Updating profile for user:', auth0UserId.substring(0, 8) + '...', 'with data keys:', Object.keys(updateData));
-    console.info('👤 [profile] POST: Received email in updateData:', updateData.email);
-    console.info('👤 [profile] POST: Decoded email from JWT:', decoded.email);
+    console.log('Updating profile for user:', auth0UserId, 'with data:', Object.keys(updateData));
+    console.log('📧 Received email in updateData:', updateData.email);
+    console.log('📧 Decoded email from JWT:', decoded.email);
     
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
@@ -246,17 +204,9 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     // Update last_login_at when profile is updated
     validatedData.last_login_at = new Date().toISOString();
     
-    console.info('👤 [profile] POST: Prepared validated data:', JSON.stringify({
-      ...validatedData,
-      achievements: validatedData.achievements ? `[${Array.isArray(validatedData.achievements) ? validatedData.achievements.length : 'object'} items]` : undefined,
-      stats: validatedData.stats ? '[object]' : undefined,
-      preferences: validatedData.preferences ? '[object]' : undefined,
-      learning_progress: validatedData.learning_progress ? '[object]' : undefined
-    }, null, 2));
-
     // Update or insert user record
     if (existingUser) {
-      console.info('👤 [profile] POST: Updating existing user');
+      console.log('Updating existing user');
       // Update existing user
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
@@ -266,23 +216,19 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
         .single();
       
       if (updateError) {
-        console.error('👤 [profile] POST: Error updating user:', updateError);
+        console.error('Error updating user:', updateError);
         throw updateError;
       }
       
       // Return updated comprehensive profile
       const profile: UserProfile = buildProfileFromDbData(updatedUser, decoded);
-      console.info('👤 [profile] POST: User updated successfully');
-      console.info('👤 [profile] POST: FULL RESPONSE BEING SENT:', JSON.stringify({
-        ...profile,
-        achievements: Array.isArray(profile.achievements) ? `[${profile.achievements.length} items]` : profile.achievements
-      }, null, 2));
+      console.log('User updated successfully');
       return res.status(200).json(profile);
       
     } else {
-      console.info('👤 [profile] POST: Creating new user');
+      console.log('Creating new user');
       // Insert new user
-      console.info('👤 [profile] POST: Creating new user with email:', validatedData.email || decoded.email || '');
+      console.log('📧 Creating new user with email:', validatedData.email || decoded.email || '');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -296,24 +242,17 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
         .single();
       
       if (insertError) {
-        console.error('👤 [profile] POST: Error creating user:', insertError);
+        console.error('Error creating user:', insertError);
         throw insertError;
       }
       
       // Return new comprehensive profile
       const profile: UserProfile = buildProfileFromDbData(newUser, decoded);
-      console.info('👤 [profile] POST: New user created successfully');
-      console.info('👤 [profile] POST: FULL RESPONSE BEING SENT:', JSON.stringify({
-        ...profile,
-        achievements: Array.isArray(profile.achievements) ? `[${profile.achievements.length} items]` : profile.achievements
-      }, null, 2));
+      console.log('New user created successfully');
       return res.status(200).json(profile);
     }
   } catch (error) {
-    console.error('👤 [profile] POST: Update profile error:', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    console.error('Update profile error:', error);
     return res.status(500).json({ error: 'Failed to update profile' });
   }
 }

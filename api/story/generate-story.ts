@@ -68,13 +68,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.info('📖 [story] ========== REQUEST START ==========');
     console.info('📖 [story] Request received for prompt:', prompt);
-    console.info('📖 [story] REQUEST BODY:', JSON.stringify({
-      prompt,
-      gradeLevel,
-      userId: userId?.substring(0, 8) + '...'
-    }, null, 2));
     
     // Build system instructions
     const systemInstructions = getStoryInstructions(prompt, gradeLevel);
@@ -83,40 +77,30 @@ export default async function handler(req: any, res: any) {
     const config = buildAIConfig(storyResponseSchema, systemInstructions);
     
     // Create contents for AI request
-    const userPrompt = `prompt = ${prompt}, grade ${gradeLevel}, age ${gradeLevel + 5}`;
     const contents = [
       {
         role: 'user',
         parts: [
           {
-            text: userPrompt,
+            text: `prompt = ${prompt}, grade ${gradeLevel}, age ${gradeLevel + 5}`,
           },
         ],
       },
     ];
 
-    console.info('📖 [story] SYSTEM INSTRUCTIONS LENGTH:', systemInstructions.length);
-    console.info('📖 [story] USER PROMPT:', userPrompt);
-
     // Process AI request using centralized handler
-    const { responseText, usageMetadata, rawResponse } = await processAIRequest(
+    const { responseText, usageMetadata } = await processAIRequest(
       config, 
       contents, 
       'story', 
       prompt
     );
     
-    // Log full raw response
-    console.info('🔍 [story] FULL RAW RESPONSE OBJECT:', JSON.stringify(rawResponse, null, 2));
-    
     // Process the story response
     const processedResponse = processStoryResponse(responseText, prompt, gradeLevel);
     
     // Normalize achievement tags
     normalizeAchievementTags(processedResponse);
-
-    // Log processed response
-    console.info('🔍 [story] PROCESSED RESPONSE:', JSON.stringify(processedResponse, null, 2));
 
     // Log successful request
     logStoryCall({
@@ -131,9 +115,7 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
 
-    console.info('✅ [story] ========== REQUEST COMPLETE ==========');
     console.info('✅ [story] Successfully generated story for prompt:', prompt);
-    console.info('📤 [story] FULL RESPONSE BEING SENT:', JSON.stringify(processedResponse, null, 2));
     
     return res.status(200).json(processedResponse);
     

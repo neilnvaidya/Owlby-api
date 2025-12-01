@@ -74,13 +74,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.info('📚 [lesson] ========== REQUEST START ==========');
     console.info('📚 [lesson] Request received for topic:', topic);
-    console.info('📚 [lesson] REQUEST BODY:', JSON.stringify({
-      topic,
-      gradeLevel,
-      userId: userId?.substring(0, 8) + '...'
-    }, null, 2));
     
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel);
@@ -89,40 +83,30 @@ export default async function handler(req: any, res: any) {
     const config = buildAIConfig(lessonResponseSchema, systemInstructions);
     
     // Create contents for AI request
-    const userPrompt = `topic = ${topic}, grade ${gradeLevel}, age ${gradeLevel + 5}`;
     const contents = [
       {
         role: 'user',
         parts: [
           {
-            text: userPrompt,
+            text: `topic = ${topic}, grade ${gradeLevel}, age ${gradeLevel + 5}`,
           },
         ],
       },
     ];
     
-    console.info('📚 [lesson] SYSTEM INSTRUCTIONS LENGTH:', systemInstructions.length);
-    console.info('📚 [lesson] USER PROMPT:', userPrompt);
-    
     // Process AI request using centralized handler
-    const { responseText, usageMetadata, rawResponse } = await processAIRequest(
+    const { responseText, usageMetadata } = await processAIRequest(
       config, 
       contents, 
       'lesson', 
       topic
     );
     
-    // Log full raw response
-    console.info('🔍 [lesson] FULL RAW RESPONSE OBJECT:', JSON.stringify(rawResponse, null, 2));
-    
     // Process the lesson response
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
     
     // Normalize achievement tags
     normalizeAchievementTags(processedResponse);
-
-    // Log processed response
-    console.info('🔍 [lesson] PROCESSED RESPONSE:', JSON.stringify(processedResponse, null, 2));
 
     // Log successful request
     logLessonCall({
@@ -137,9 +121,7 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
 
-    console.info('✅ [lesson] ========== REQUEST COMPLETE ==========');
     console.info('✅ [lesson] Successfully generated lesson for topic:', topic);
-    console.info('📤 [lesson] FULL RESPONSE BEING SENT:', JSON.stringify(processedResponse, null, 2));
     
     return res.status(200).json(processedResponse);
     
