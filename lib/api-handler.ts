@@ -96,7 +96,15 @@ export async function processAIRequest(
     }
 
     const requestDuration = Date.now() - requestStartTime;
+    const finishReason = (response as any).candidates?.[0]?.finishReason;
+    
     console.info(`⏱️ [${endpoint}] Gemini API call completed in ${requestDuration}ms`);
+    console.info(`🔍 [${endpoint}] Finish reason:`, finishReason || 'unknown');
+    
+    if (finishReason === 'MAX_TOKENS') {
+      console.warn(`⚠️ [${endpoint}] Response was truncated due to MAX_TOKENS limit!`);
+      console.warn(`⚠️ [${endpoint}] Consider increasing maxOutputTokens or simplifying the response schema`);
+    }
     
     // Log FULL RAW RESPONSE for debugging
     console.info(`🔍 [${endpoint}] FULL RAW RESPONSE:`, JSON.stringify(response, null, 2));
