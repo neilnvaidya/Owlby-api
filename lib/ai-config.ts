@@ -29,6 +29,17 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 export const MODEL_NAME = PRIMARY_MODEL || SECONDARY_MODEL || DEFAULT_MODEL;
 
 /**
+ * Model capability detection for thinking mode configuration
+ * - Gemini 3.0 Pro: uses thinkingLevel ('LOW', 'MEDIUM', 'HIGH')
+ * - Gemini 2.5 Pro: uses thinkingBudget (token count)
+ * - Flash/other models: no thinking config needed
+ */
+const modelLower = MODEL_NAME.toLowerCase();
+export const IS_GEMINI_3_PRO = modelLower.includes('gemini-3') && modelLower.includes('pro');
+export const IS_GEMINI_2_5_PRO = modelLower.includes('gemini-2.5') && modelLower.includes('pro');
+export const IS_THINKING_MODEL = IS_GEMINI_3_PRO || IS_GEMINI_2_5_PRO;
+
+/**
  * Standard safety settings for all Owlby AI endpoints
  * Configured for child-friendly content generation
  */
@@ -75,16 +86,39 @@ export function buildAIConfig(
   systemInstruction: string,
   maxOutputTokens: number = 4096
 ) {
-  return {
+  const baseConfig = {
     safetySettings: SAFETY_SETTINGS,
     responseMimeType: 'application/json',
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
     // Output control parameters (must be at top level of config)
     maxOutputTokens,
-    // For Gemini 3 Pro, Google recommends using the model's default temperature.
-    // If you need to tune creativity for specific endpoints, add a temperature here per-endpoint.
   };
+
+  // Add thinking config for Pro models
+  // Using LOW thinking for faster responses while maintaining quality
+  if (IS_GEMINI_3_PRO) {
+    // Gemini 3.0 Pro uses thinkingLevel enum
+    return {
+      ...baseConfig,
+      thinkingConfig: {
+        thinkingLevel: 'LOW',
+      },
+    };
+  }
+
+  if (IS_GEMINI_2_5_PRO) {
+    // Gemini 2.5 Pro uses thinkingBudget (token count)
+    // 1024 = low thinking, 4096 = medium, 8192+ = high
+    return {
+      ...baseConfig,
+      thinkingConfig: {
+        thinkingBudget: 1024,
+      },
+    };
+  }
+
+  return baseConfig;
 }
 
 /**
