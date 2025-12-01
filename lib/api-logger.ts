@@ -43,8 +43,7 @@ interface LogEntry {
   response_time_ms: number;
   success: boolean;
   error_type?: string;
-  // exact_cost is optional - may not exist in all database schemas
-  exact_cost?: number;
+  exact_cost: number;
 }
 
 class APILoggingService {
@@ -148,7 +147,6 @@ class APILoggingService {
       console.info(`💸 [${data.route.toUpperCase()}] COST SUMMARY: $${exactCost.toFixed(6)} (${costInCents.toFixed(3)}¢) | ${inputTokens}→${outputTokens} tokens | ${data.responseTimeMs}ms`);
       console.info(`📊 [SESSION TOTALS] Calls: ${this.sessionStats.totalCalls} | Total Cost: $${this.sessionStats.totalCost.toFixed(6)} (${sessionCostInCents.toFixed(3)}¢) | Tokens: ${this.sessionStats.totalInputTokens}→${this.sessionStats.totalOutputTokens}`);
       
-      // Build entry object - exact_cost is optional to handle schema variations
       const entry: LogEntry = {
         timestamp: new Date().toISOString(),
         route: data.route,
@@ -164,13 +162,8 @@ class APILoggingService {
         response_time_ms: data.responseTimeMs,
         success: data.success,
         error_type: data.error,
+        exact_cost: exactCost
       };
-      
-      // Only add exact_cost if explicitly enabled (prevents schema errors)
-      // Set INCLUDE_EXACT_COST=true in env to enable cost tracking
-      if (process.env.INCLUDE_EXACT_COST === 'true') {
-        entry.exact_cost = exactCost;
-      }
 
       this.buffer.push(entry);
 
