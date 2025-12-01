@@ -15,10 +15,16 @@ const ENABLE_API_LOGGING = false;
 
 /**
  * Process the JSON response from Owlby chat API
- * No truncation applied - AI schema and instructions constrain output sizes appropriately
+ * Handles truncated or malformed JSON gracefully
  */
 function processOwlbyResponse(responseText: string) {
   try {
+    // Log the raw response for debugging
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[chat] Raw response length:', responseText.length);
+      console.debug('[chat] Raw response preview:', responseText.slice(0, 200));
+    }
+    
     const jsonResponse = JSON.parse(responseText);
     
     if (jsonResponse.response_text && jsonResponse.interactive_elements) {
@@ -29,14 +35,65 @@ function processOwlbyResponse(responseText: string) {
     } else {
       throw new Error('Invalid JSON structure');
     }
-  } catch (error) {
-    console.warn('Failed to parse JSON response, falling back to plain text:', error);
+  } catch (error: any) {
+    // Log the full response when parsing fails for debugging
+    console.error('❌ [chat] Failed to parse JSON response');
+    console.error('❌ [chat] Error:', error.message);
+    console.error('❌ [chat] Response length:', responseText.length);
+    console.error('❌ [chat] Response text (first 500 chars):', responseText.slice(0, 500));
+    console.error('❌ [chat] Response text (last 200 chars):', responseText.slice(-200));
+    
+    // Try to extract any usable text from the response
+    let extractedText = responseText;
+    
+    // Try to find JSON-like content even if truncated
+    const jsonMatch = responseText.match(/\{[\s\S]*/);
+    if (jsonMatch) {
+      try {
+        // Try to repair common truncation issues
+        let repairedJson = jsonMatch[0];
+        
+        // Close unclosed strings
+        const openQuotes = (repairedJson.match(/"/g) || []).length;
+        if (openQuotes % 2 !== 0) {
+          // Unclosed string, try to close it
+          repairedJson = repairedJson.replace(/"([^"]*)$/, '"$1"');
+        }
+        
+        // Try to close the JSON object
+        const openBraces = (repairedJson.match(/\{/g) || []).length;
+        const closeBraces = (repairedJson.match(/\}/g) || []).length;
+        if (openBraces > closeBraces) {
+          // Add missing closing braces
+          repairedJson += '}'.repeat(openBraces - closeBraces);
+        }
+        
+        const repaired = JSON.parse(repairedJson);
+        if (repaired.response_text?.main) {
+          console.info('✅ [chat] Successfully repaired truncated JSON');
+          return {
+            success: true,
+            data: repaired
+          };
+        }
+      } catch (repairError) {
+        // Repair failed, continue with fallback
+      }
+    }
+    
+    // Extract any readable text from the response
+    const textMatch = responseText.match(/"main"\s*:\s*"([^"]*)/);
+    if (textMatch && textMatch[1]) {
+      extractedText = textMatch[1];
+    }
+    
+    console.warn('⚠️ [chat] Falling back to plain text response');
     
     return {
       success: false,
       data: {
         response_text: {
-          main: responseText,
+          main: extractedText || responseText || "I'm having trouble processing that. Could you try asking again?",
           follow_up: "What would you like to learn about next?"
         },
         interactive_elements: {
