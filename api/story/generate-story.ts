@@ -1,7 +1,7 @@
 import { logStoryCall, flushApiLogger } from '../../lib/api-logger';
 import { storyResponseSchema } from '../../lib/ai-schemas';
 import { getStoryInstructions } from '../../lib/ai-instructions';
-import { buildAIConfig, MODEL_NAME } from '../../lib/ai-config';
+import { buildAIConfig } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -60,7 +60,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: 'BadRequest',
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
     
@@ -111,7 +111,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: true,
       usageMetadata,
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
 
@@ -128,7 +128,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
 
