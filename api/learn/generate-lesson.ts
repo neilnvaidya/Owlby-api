@@ -1,7 +1,7 @@
 import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
 import { lessonResponseSchema } from '../../lib/ai-schemas';
 import { getLessonInstructions } from '../../lib/ai-instructions';
-import { buildAIConfig, MODEL_NAME } from '../../lib/ai-config';
+import { buildAIConfig } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -33,8 +33,6 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
-        // Optional CSS-based visual representation, passed through for clients that support it
-        visual: lesson.visual || null,
         // Include normalized achievement tags
         requiredCategoryTags: lesson.requiredCategoryTags || [],
         optionalTags: lesson.optionalTags || []
@@ -66,7 +64,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: 'BadRequest',
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
     
@@ -78,7 +76,7 @@ export default async function handler(req: any, res: any) {
     
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel);
-
+    
     // Build AI configuration
     const config = buildAIConfig(lessonResponseSchema, systemInstructions);
     
@@ -117,7 +115,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: true,
       usageMetadata,
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
 
@@ -134,7 +132,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model: MODEL_NAME,
+      model: 'gemini-2.5-flash',
     });
     await flushApiLogger();
 

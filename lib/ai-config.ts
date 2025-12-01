@@ -17,16 +17,7 @@ export const ai = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
-// Centralized model selection for all AI calls.
-// Priority:
-// 1) GEMINI_MODEL_NAME (primary)
-// 2) GEMINI_MODEL_NAME_FALLBACK (secondary)
-// 3) hardcoded default 'gemini-2.5-flash'
-const PRIMARY_MODEL = process.env.GEMINI_MODEL_NAME;
-const SECONDARY_MODEL = process.env.GEMINI_MODEL_NAME_FALLBACK;
-const DEFAULT_MODEL = 'gemini-2.5-flash';
-
-export const MODEL_NAME = PRIMARY_MODEL || SECONDARY_MODEL || DEFAULT_MODEL;
+export const MODEL_NAME = 'gemini-2.5-flash';
 
 /**
  * Standard safety settings for all Owlby AI endpoints
@@ -82,8 +73,7 @@ export function buildAIConfig(
     systemInstruction: [{ text: systemInstruction }],
     // Output control parameters (must be at top level of config)
     maxOutputTokens,
-    // For Gemini 3 Pro, Google recommends using the model's default temperature.
-    // If you need to tune creativity for specific endpoints, add a temperature here per-endpoint.
+    temperature: 0.8,
   };
 }
 
