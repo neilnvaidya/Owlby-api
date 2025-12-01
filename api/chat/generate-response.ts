@@ -2,7 +2,7 @@ import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 import { chatResponseSchema } from '../../lib/ai-schemas';
 import { getChatInstructions } from '../../lib/ai-instructions';
-import { buildChatConfig, MODEL_NAME } from '../../lib/ai-config';
+import { buildChatConfig, getChatModelName, MODEL_NAME } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -125,8 +125,11 @@ export default async function handler(req: any, res: any) {
     
     // Build chat-optimized AI configuration
     // Automatically uses GEMINI_CHAT_MODEL_NAME if set, otherwise falls back to MODEL_NAME
-    // Applies speed optimizations: reduced tokens, disabled thinking, flash model preference
+    // Applies speed optimizations: reduced tokens, disabled thinking
     const config = buildChatConfig(chatResponseSchema, systemInstructions);
+    
+    // Get the chat model name (from GEMINI_CHAT_MODEL_NAME or MODEL_NAME)
+    const chatModel = getChatModelName();
     
     // Create contents for AI request
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
@@ -142,12 +145,13 @@ export default async function handler(req: any, res: any) {
     try {
       const aiStart = Date.now();
       
-      // Process AI request using centralized handler
+      // Process AI request using centralized handler with chat-specific model
       const { responseText, usageMetadata } = await processAIRequest(
         config, 
         contents, 
         'chat', 
-        lastUserMessage
+        lastUserMessage,
+        chatModel
       );
       
       aiDurationMs = Date.now() - aiStart;

@@ -141,10 +141,9 @@ export function gradeToAge(gradeLevel: number): number {
  * @param responseSchema - JSON schema for structured output
  * @param systemInstruction - System instruction text
  * @param maxOutputTokens - Maximum output tokens (default: 4096)
- * @param modelName - Optional model name override
+ * @param modelName - Optional model name override (uses MODEL_NAME if not provided)
  * @param options - Optional configuration overrides
  *   - disableThinking: Skip thinking config even for pro models (for speed-critical endpoints)
- *   - useFlashModel: Force use of flash model variant if available
  */
 export function buildAIConfig(
   responseSchema: any,
@@ -153,18 +152,9 @@ export function buildAIConfig(
   modelName?: string,
   options?: {
     disableThinking?: boolean;
-    useFlashModel?: boolean;
   }
 ) {
-  let activeModel = modelName || MODEL_NAME;
-  
-  // Option to use flash model variant for speed (e.g., gemini-2.5-flash instead of gemini-2.5-pro)
-  if (options?.useFlashModel && activeModel.includes('-pro')) {
-    activeModel = activeModel.replace('-pro', '-flash');
-    if (process.env.NODE_ENV === 'development') {
-      console.info(`⚡ [AI Config] Using flash model for speed: ${activeModel}`);
-    }
-  }
+  const activeModel = modelName || MODEL_NAME;
   
   const baseConfig: any = {
     safetySettings: SAFETY_SETTINGS,
@@ -192,10 +182,9 @@ export function buildAIConfig(
 
 /**
  * Chat-specific configuration builder with automatic optimizations
- * - Uses chat-specific model if configured (GEMINI_CHAT_MODEL_NAME)
+ * - Uses chat-specific model if configured (GEMINI_CHAT_MODEL_NAME), otherwise MODEL_NAME
  * - Automatically disables thinking for speed
  * - Uses reduced token limit optimized for chat responses
- * - Prefers flash models for speed
  */
 export function buildChatConfig(
   responseSchema: any,
@@ -210,7 +199,6 @@ export function buildChatConfig(
     chatModel,
     {
       disableThinking: true, // Always disable thinking for chat speed
-      useFlashModel: !CHAT_MODEL_NAME, // Auto-use flash if no explicit chat model set
     }
   );
 }

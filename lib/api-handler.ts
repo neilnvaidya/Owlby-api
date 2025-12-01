@@ -32,18 +32,25 @@ export function handleCORS(req: any, res: any): boolean {
 
 /**
  * Standard AI request processing
+ * @param config - AI configuration object
+ * @param contents - Message contents array
+ * @param endpoint - Endpoint name for logging
+ * @param inputText - Input text for logging
+ * @param modelName - Optional model name override (uses MODEL_NAME if not provided)
  */
 export async function processAIRequest(
   config: any,
   contents: any[],
   endpoint: string,
-  inputText: string
+  inputText: string,
+  modelName?: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
   try {
-    console.info(`🦉 [${endpoint}] → Gemini: input len=${inputText.length}`);
+    const activeModel = modelName || MODEL_NAME;
+    console.info(`🦉 [${endpoint}] → Gemini: model=${activeModel} input len=${inputText.length}`);
     
     const response = await ai.models.generateContent({
-      model: MODEL_NAME,
+      model: activeModel,
       config,
       contents,
     });
