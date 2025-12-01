@@ -184,7 +184,7 @@ export function buildAIConfig(
  * Chat-specific configuration builder with automatic optimizations
  * - Uses chat-specific model if configured (GEMINI_CHAT_MODEL_NAME), otherwise MODEL_NAME
  * - Automatically disables thinking for speed
- * - Uses token limit optimized for chat responses (increased to prevent truncation)
+ * - Uses reduced token limit optimized for chat responses
  */
 export function buildChatConfig(
   responseSchema: any,
@@ -195,7 +195,7 @@ export function buildChatConfig(
   return buildAIConfig(
     responseSchema,
     systemInstruction,
-    2048, // Increased from 1024 to prevent JSON truncation (chat responses 300-800 chars ≈ 200-500 tokens, but JSON overhead needs more)
+    1024, // Optimized for chat responses (300-800 chars ≈ 200-500 tokens)
     chatModel,
     {
       disableThinking: true, // Always disable thinking for chat speed
