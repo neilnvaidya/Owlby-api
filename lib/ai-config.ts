@@ -28,6 +28,9 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 export const MODEL_NAME = PRIMARY_MODEL || SECONDARY_MODEL || DEFAULT_MODEL;
 
+// Export secondary model for fallback logic
+export const FALLBACK_MODEL = SECONDARY_MODEL || DEFAULT_MODEL;
+
 // Chat-specific model override for speed (optional)
 // If set, chat endpoint will use this model instead of MODEL_NAME for faster responses
 // Set via GEMINI_CHAT_MODEL_NAME environment variable (e.g., gemini-2.5-flash)
