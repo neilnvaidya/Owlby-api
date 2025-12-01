@@ -39,6 +39,14 @@
     {
       "source": "/feedback/submit",
       "destination": "/api/feedback/submit"
+    },
+    {
+      "source": "/story/generate-story",
+      "destination": "/api/story/generate-story"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/api/delete-account"
     }
   ]
 } 
