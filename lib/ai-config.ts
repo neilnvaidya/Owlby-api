@@ -28,6 +28,19 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 export const MODEL_NAME = PRIMARY_MODEL || SECONDARY_MODEL || DEFAULT_MODEL;
 
+// Chat-specific model override for speed (optional)
+// If set, chat endpoint will use this model instead of MODEL_NAME for faster responses
+// Set via GEMINI_CHAT_MODEL_NAME environment variable (e.g., gemini-2.5-flash)
+export const CHAT_MODEL_NAME = process.env.GEMINI_CHAT_MODEL_NAME || null;
+
+/**
+ * Get the appropriate model name for chat endpoint
+ * Automatically uses CHAT_MODEL_NAME if configured, otherwise falls back to MODEL_NAME
+ */
+export function getChatModelName(): string {
+  return CHAT_MODEL_NAME || MODEL_NAME;
+}
+
 /**
  * Check if the model is a Gemini 3 Pro model
  */
@@ -124,14 +137,35 @@ export function gradeToAge(gradeLevel: number): number {
 /**
  * Standard configuration builder for AI requests
  * Automatically adds thinking configuration for pro models
+ * 
+ * @param responseSchema - JSON schema for structured output
+ * @param systemInstruction - System instruction text
+ * @param maxOutputTokens - Maximum output tokens (default: 4096)
+ * @param modelName - Optional model name override
+ * @param options - Optional configuration overrides
+ *   - disableThinking: Skip thinking config even for pro models (for speed-critical endpoints)
+ *   - useFlashModel: Force use of flash model variant if available
  */
 export function buildAIConfig(
   responseSchema: any,
   systemInstruction: string,
   maxOutputTokens: number = 4096,
-  modelName?: string
+  modelName?: string,
+  options?: {
+    disableThinking?: boolean;
+    useFlashModel?: boolean;
+  }
 ) {
-  const activeModel = modelName || MODEL_NAME;
+  let activeModel = modelName || MODEL_NAME;
+  
+  // Option to use flash model variant for speed (e.g., gemini-2.5-flash instead of gemini-2.5-pro)
+  if (options?.useFlashModel && activeModel.includes('-pro')) {
+    activeModel = activeModel.replace('-pro', '-flash');
+    if (process.env.NODE_ENV === 'development') {
+      console.info(`⚡ [AI Config] Using flash model for speed: ${activeModel}`);
+    }
+  }
+  
   const baseConfig: any = {
     safetySettings: SAFETY_SETTINGS,
     responseMimeType: 'application/json',
@@ -143,8 +177,8 @@ export function buildAIConfig(
     // If you need to tune creativity for specific endpoints, add a temperature here per-endpoint.
   };
 
-  // Add thinking configuration for pro models
-  if (isProModel(activeModel)) {
+  // Add thinking configuration for pro models (unless disabled for speed)
+  if (isProModel(activeModel) && !options?.disableThinking) {
     const thinkingConfig = getThinkingConfig(activeModel);
     Object.assign(baseConfig, thinkingConfig);
     
@@ -154,6 +188,31 @@ export function buildAIConfig(
   }
 
   return baseConfig;
+}
+
+/**
+ * Chat-specific configuration builder with automatic optimizations
+ * - Uses chat-specific model if configured (GEMINI_CHAT_MODEL_NAME)
+ * - Automatically disables thinking for speed
+ * - Uses reduced token limit optimized for chat responses
+ * - Prefers flash models for speed
+ */
+export function buildChatConfig(
+  responseSchema: any,
+  systemInstruction: string
+) {
+  const chatModel = getChatModelName();
+  
+  return buildAIConfig(
+    responseSchema,
+    systemInstruction,
+    1024, // Optimized for chat responses (300-800 chars ≈ 200-500 tokens)
+    chatModel,
+    {
+      disableThinking: true, // Always disable thinking for chat speed
+      useFlashModel: !CHAT_MODEL_NAME, // Auto-use flash if no explicit chat model set
+    }
+  );
 }
 
 /**

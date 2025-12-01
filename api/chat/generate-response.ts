@@ -2,7 +2,7 @@ import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 import { chatResponseSchema } from '../../lib/ai-schemas';
 import { getChatInstructions } from '../../lib/ai-instructions';
-import { buildAIConfig, MODEL_NAME } from '../../lib/ai-config';
+import { buildChatConfig, MODEL_NAME } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -123,8 +123,10 @@ export default async function handler(req: any, res: any) {
 
     const systemInstructions = getChatInstructions(gradeLevel, recentContext);
     
-    // Build AI configuration
-    const config = buildAIConfig(chatResponseSchema, systemInstructions);
+    // Build chat-optimized AI configuration
+    // Automatically uses GEMINI_CHAT_MODEL_NAME if set, otherwise falls back to MODEL_NAME
+    // Applies speed optimizations: reduced tokens, disabled thinking, flash model preference
+    const config = buildChatConfig(chatResponseSchema, systemInstructions);
     
     // Create contents for AI request
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
