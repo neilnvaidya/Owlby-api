@@ -29,58 +29,15 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 export const MODEL_NAME = PRIMARY_MODEL || SECONDARY_MODEL || DEFAULT_MODEL;
 
 /**
- * Check if the model is a Gemini 3 Pro model
+ * Model capability detection for thinking mode configuration
+ * - Gemini 3.0 Pro: uses thinkingLevel ('LOW', 'MEDIUM', 'HIGH')
+ * - Gemini 2.5 Pro: uses thinkingBudget (token count)
+ * - Flash/other models: no thinking config needed
  */
-function isGemini3Pro(modelName: string): boolean {
-  return modelName.includes('gemini-3-pro') || modelName.includes('gemini-3.0-pro');
-}
-
-/**
- * Check if the model is a Gemini 2.5 Pro model
- */
-function isGemini25Pro(modelName: string): boolean {
-  return modelName.includes('gemini-2.5-pro') || modelName.includes('gemini-2.0-pro');
-}
-
-/**
- * Check if the model is any Pro model (supports thinking)
- */
-function isProModel(modelName: string): boolean {
-  return isGemini3Pro(modelName) || isGemini25Pro(modelName);
-}
-
-/**
- * Get thinking configuration for pro models
- * - Gemini 3 Pro: uses thinkingLevel ('LOW', 'MEDIUM', 'HIGH')
- *   - Configurable via GEMINI_THINKING_LEVEL env var (default: 'LOW')
- * - Gemini 2.5 Pro: uses thinkingBudget (number of tokens)
- *   - Configurable via GEMINI_THINKING_BUDGET env var (default: 1000)
- */
-function getThinkingConfig(modelName: string): any {
-  if (isGemini3Pro(modelName)) {
-    // Gemini 3 Pro uses thinkingLevel
-    // Valid values: 'LOW', 'MEDIUM', 'HIGH'
-    const thinkingLevel = (process.env.GEMINI_THINKING_LEVEL || 'LOW').toUpperCase();
-    const validLevels = ['LOW', 'MEDIUM', 'HIGH'];
-    const level = validLevels.includes(thinkingLevel) ? thinkingLevel : 'LOW';
-    
-    return {
-      thinkingConfig: {
-        thinkingLevel: level,
-      },
-    };
-  } else if (isGemini25Pro(modelName)) {
-    // Gemini 2.5 Pro uses thinkingBudget (tokens)
-    // Default budget: 1000 tokens (adjustable via GEMINI_THINKING_BUDGET env var)
-    const thinkingBudget = parseInt(process.env.GEMINI_THINKING_BUDGET || '1000', 10);
-    return {
-      thinkingConfig: {
-        thinkingBudget,
-      },
-    };
-  }
-  return {}; // No thinking config for non-pro models
-}
+const modelLower = MODEL_NAME.toLowerCase();
+export const IS_GEMINI_3_PRO = modelLower.includes('gemini-3') && modelLower.includes('pro');
+export const IS_GEMINI_2_5_PRO = modelLower.includes('gemini-2.5') && modelLower.includes('pro');
+export const IS_THINKING_MODEL = IS_GEMINI_3_PRO || IS_GEMINI_2_5_PRO;
 
 /**
  * Standard safety settings for all Owlby AI endpoints
@@ -123,34 +80,42 @@ export function gradeToAge(gradeLevel: number): number {
 
 /**
  * Standard configuration builder for AI requests
- * Automatically adds thinking configuration for pro models
  */
 export function buildAIConfig(
   responseSchema: any,
   systemInstruction: string,
-  maxOutputTokens: number = 4096,
-  modelName?: string
+  maxOutputTokens: number = 4096
 ) {
-  const activeModel = modelName || MODEL_NAME;
-  const baseConfig: any = {
+  const baseConfig = {
     safetySettings: SAFETY_SETTINGS,
     responseMimeType: 'application/json',
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
     // Output control parameters (must be at top level of config)
     maxOutputTokens,
-    // For Gemini 3 Pro, Google recommends using the model's default temperature.
-    // If you need to tune creativity for specific endpoints, add a temperature here per-endpoint.
   };
 
-  // Add thinking configuration for pro models
-  if (isProModel(activeModel)) {
-    const thinkingConfig = getThinkingConfig(activeModel);
-    Object.assign(baseConfig, thinkingConfig);
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.info(`🧠 [AI Config] Added thinking config for ${activeModel}:`, thinkingConfig);
-    }
+  // Add thinking config for Pro models
+  // Using LOW thinking for faster responses while maintaining quality
+  if (IS_GEMINI_3_PRO) {
+    // Gemini 3.0 Pro uses thinkingLevel enum
+    return {
+      ...baseConfig,
+      thinkingConfig: {
+        thinkingLevel: 'LOW',
+      },
+    };
+  }
+
+  if (IS_GEMINI_2_5_PRO) {
+    // Gemini 2.5 Pro uses thinkingBudget (token count)
+    // 1024 = low thinking, 4096 = medium, 8192+ = high
+    return {
+      ...baseConfig,
+      thinkingConfig: {
+        thinkingBudget: 1024,
+      },
+    };
   }
 
   return baseConfig;
