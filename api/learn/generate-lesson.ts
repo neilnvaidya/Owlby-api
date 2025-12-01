@@ -124,7 +124,7 @@ export default async function handler(req: any, res: any) {
     // Log processed response
     console.info('🔍 [lesson] PROCESSED RESPONSE:', JSON.stringify(processedResponse, null, 2));
 
-    // Log successful request
+    // Log successful request (don't await flush to avoid blocking)
     logLessonCall({
       userId,
       gradeLevel,
@@ -135,26 +135,52 @@ export default async function handler(req: any, res: any) {
       usageMetadata,
       model: MODEL_NAME,
     });
-    await flushApiLogger();
+    // Flush in background to avoid blocking response
+    flushApiLogger().catch(err => {
+      console.error('📚 [lesson] Error flushing logs:', err);
+    });
 
+    const totalMs = Date.now() - startTime;
     console.info('✅ [lesson] ========== REQUEST COMPLETE ==========');
-    console.info('✅ [lesson] Successfully generated lesson for topic:', topic);
+    console.info(`✅ [lesson] Successfully generated lesson for topic: ${topic} (${totalMs}ms total)`);
     console.info('📤 [lesson] FULL RESPONSE BEING SENT:', JSON.stringify(processedResponse, null, 2));
     
     return res.status(200).json(processedResponse);
     
   } catch (error: any) {
-    // Log failed request
+    const totalMs = Date.now() - startTime;
+    console.error('📚 [lesson] ========== REQUEST ERROR ==========');
+    console.error(`📚 [lesson] Error after ${totalMs}ms:`, {
+      error: error.message || 'UnknownError',
+      stack: error.stack,
+      name: error.name,
+      topic: req.body?.topic
+    });
+    
+    // Log failed request (don't await flush)
     logLessonCall({
       userId,
       gradeLevel,
       topic,
-      responseTimeMs: Date.now() - startTime,
+      responseTimeMs: totalMs,
       success: false,
       error: error.message || 'UnknownError',
       model: MODEL_NAME,
     });
-    await flushApiLogger();
+    // Flush in background
+    flushApiLogger().catch(err => {
+      console.error('📚 [lesson] Error flushing logs:', err);
+    });
+
+    // Check for timeout specifically
+    if (error.message && error.message.includes('Timeout')) {
+      console.error('📚 [lesson] TIMEOUT DETECTED - AI request took too long');
+      return res.status(504).json({
+        error: 'Request timeout',
+        message: 'The lesson generation took too long. Please try again with a simpler topic.',
+        details: `Request exceeded ${totalMs}ms`
+      });
+    }
 
     // Create standardized error response
     const errorResponse = createErrorResponse(error, 'lesson', { 

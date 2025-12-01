@@ -31,6 +31,24 @@ export function handleCORS(req: any, res: any): boolean {
 }
 
 /**
+ * Timeout wrapper for async operations
+ */
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  operationName: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Timeout: ${operationName} exceeded ${timeoutMs}ms`));
+      }, timeoutMs);
+    })
+  ]);
+}
+
+/**
  * Standard AI request processing
  * Handles non-text parts (like thoughtSignature) and extracts all text parts correctly
  */
@@ -41,6 +59,7 @@ export async function processAIRequest(
   inputText: string
 ): Promise<{ responseText: string; usageMetadata: any; rawResponse: any }> {
   const requestStartTime = Date.now();
+  const AI_TIMEOUT_MS = 240000; // 4 minutes (leave buffer before Vercel's 5 min limit)
   
   try {
     console.info(`🦉 [${endpoint}] → Gemini: input len=${inputText.length}`);
@@ -50,16 +69,34 @@ export async function processAIRequest(
       hasResponseSchema: !!config.responseSchema,
       hasSystemInstruction: !!config.systemInstruction,
       hasThinkingConfig: !!config.thinkingConfig,
-      thinkingConfig: config.thinkingConfig
+      thinkingConfig: config.thinkingConfig,
+      timeoutMs: AI_TIMEOUT_MS
     }, null, 2));
     
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      config,
-      contents,
-    });
+    // Add periodic logging to track progress
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - requestStartTime;
+      console.info(`⏱️ [${endpoint}] Still waiting for Gemini response... (${elapsed}ms elapsed)`);
+    }, 30000); // Log every 30 seconds
+    
+    let response;
+    try {
+      // Wrap AI call with timeout
+      response = await withTimeout(
+        ai.models.generateContent({
+          model: MODEL_NAME,
+          config,
+          contents,
+        }),
+        AI_TIMEOUT_MS,
+        `Gemini API call for ${endpoint}`
+      );
+    } finally {
+      clearInterval(progressInterval);
+    }
 
     const requestDuration = Date.now() - requestStartTime;
+    console.info(`⏱️ [${endpoint}] Gemini API call completed in ${requestDuration}ms`);
     
     // Log FULL RAW RESPONSE for debugging
     console.info(`🔍 [${endpoint}] FULL RAW RESPONSE:`, JSON.stringify(response, null, 2));
@@ -193,8 +230,15 @@ export async function processAIRequest(
     console.error(`❌ [${endpoint}] Error details:`, {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      name: error.name,
+      duration: requestDuration
     });
+    
+    // Handle timeout specifically
+    if (error.message && error.message.includes('Timeout')) {
+      console.error(`❌ [${endpoint}] TIMEOUT: AI request exceeded ${AI_TIMEOUT_MS}ms`);
+      throw new Error(`AI_TIMEOUT: Request took ${requestDuration}ms, exceeded ${AI_TIMEOUT_MS}ms limit`);
+    }
     
     // Handle specific error types
     if (error.message && error.message.includes('User location is not supported')) {
