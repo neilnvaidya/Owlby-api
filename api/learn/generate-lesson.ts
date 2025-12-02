@@ -65,7 +65,13 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
     
-    return res.status(400).json({ error: "Topic is required." });
+    // Return graceful error response (200 status to prevent system popups)
+    return res.status(200).json({
+      success: false,
+      error: "Please provide a topic for the lesson.",
+      userMessage: "Please provide a topic for the lesson.",
+      topic: topic || null
+    });
   }
 
   try {
@@ -112,7 +118,11 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
     
-    return res.status(200).json(processedResponse);
+    // Always include success flag
+    return res.status(200).json({
+      ...processedResponse,
+      success: true
+    });
     
   } catch (error: any) {
     // Log failed request

@@ -217,6 +217,8 @@ export function normalizeAchievementTags(data: any): void {
 
 /**
  * Standard error response formatter
+ * Always returns 200 status to prevent system error popups
+ * App handles errors gracefully using success flag and user-friendly messages
  */
 export function createErrorResponse(
   error: any, 
@@ -227,13 +229,17 @@ export function createErrorResponse(
 
   const errorMessage = error.message || 'UnknownError';
 
-  // Handle specific error types
+  // Always return 200 status to prevent system error popups
+  // App will check success flag and handle errors gracefully
+
+  // Handle specific error types with user-friendly messages
   if (errorMessage === 'SERVICE_UNAVAILABLE_REGION') {
     return {
-      status: 503,
+      status: 200,
       body: {
-        error: `${endpoint} not available in your region`,
-        fallback: true,
+        success: false,
+        error: "I'm not available in your region right now. Please try again later.",
+        userMessage: "I'm not available in your region right now. Please try again later.",
         ...context
       }
     };
@@ -241,20 +247,23 @@ export function createErrorResponse(
 
   if (errorMessage.startsWith('AI_PROCESSING_FAILED')) {
     return {
-      status: 500,
+      status: 200,
       body: {
-        error: `Failed to process ${endpoint} request. Please try again.`,
-        details: errorMessage.replace('AI_PROCESSING_FAILED: ', ''),
+        success: false,
+        error: "I'm having trouble processing that right now. Please try again.",
+        userMessage: "I'm having trouble processing that right now. Please try again.",
         ...context
       }
     };
   }
 
-  // Default error response
+  // Default error response with user-friendly message
   return {
-    status: 500,
+    status: 200,
     body: {
-      error: `An unexpected error occurred while processing your ${endpoint} request.`,
+      success: false,
+      error: "Something went wrong. Please try again.",
+      userMessage: "Something went wrong. Please try again.",
       ...context
     }
   };

@@ -61,7 +61,13 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
     
-    return res.status(400).json({ error: "Story prompt is required." });
+    // Return graceful error response (200 status to prevent system popups)
+    return res.status(200).json({
+      success: false,
+      error: "Please provide a story prompt.",
+      userMessage: "Please provide a story prompt.",
+      prompt: prompt || null
+    });
   }
 
   try {
@@ -108,7 +114,11 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
     
-    return res.status(200).json(processedResponse);
+    // Always include success flag
+    return res.status(200).json({
+      ...processedResponse,
+      success: true
+    });
     
   } catch (error: any) {
     // Log failed request

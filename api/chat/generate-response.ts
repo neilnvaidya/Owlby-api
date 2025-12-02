@@ -85,8 +85,6 @@ export default async function handler(req: any, res: any) {
 
   // Validate required parameters
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
-    console.info('❌ Missing messages array or chatId');
-    
     if (ENABLE_API_LOGGING) {
       logChatCall({
         userId,
@@ -101,9 +99,21 @@ export default async function handler(req: any, res: any) {
       await flushApiLogger();
     }
     
-    return res.status(400).json({ 
-      error: "'messages' (array) and 'chatId' are required.",
-      chatId: chatId || 'unknown'
+    // Return graceful error response (200 status to prevent system popups)
+    return res.status(200).json({
+      success: false,
+      response_text: {
+        main: "I'm having trouble understanding that. Could you try asking again?",
+        follow_up: "What would you like to learn about?"
+      },
+      interactive_elements: {
+        followup_buttons: ["Try again", "Ask something else"],
+        learn_more: { prompt: "", tags: [] },
+        story_button: { title: "", story_prompt: "" }
+      },
+      chatId: chatId || 'unknown',
+      gradeLevel,
+      error: "Invalid request. Please try again."
     });
   }
 
@@ -117,8 +127,9 @@ export default async function handler(req: any, res: any) {
       : '';
     
     // Build system instructions using existing utility
+    // Use the last 3 messages for context (most recent conversation)
     const recentContext = messages
-      .slice(0, 3)
+      .slice(-3)
       .map((m: any, idx: number) => `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`)
       .join('\n');
 
@@ -234,11 +245,26 @@ export default async function handler(req: any, res: any) {
       await flushApiLogger();
     }
 
-    const errorResponse = createErrorResponse(error, 'chat', { 
-      chatId: req.body?.chatId,
-      success: false 
-    });
+    // Return graceful error response matching ChatResponse structure
+    const errorMessage = error.message || 'Unknown error';
+    const userFriendlyMessage = errorMessage.includes('region') 
+      ? "I'm not available in your region right now. Please try again later."
+      : "I'm having trouble processing that right now. Can you try asking something else?";
     
-    return res.status(errorResponse.status).json(errorResponse.body);
+    return res.status(200).json({
+      success: false,
+      response_text: {
+        main: userFriendlyMessage,
+        follow_up: "What would you like to try next?"
+      },
+      interactive_elements: {
+        followup_buttons: ["Try again", "Ask something else"],
+        learn_more: { prompt: "", tags: [] },
+        story_button: { title: "", story_prompt: "" }
+      },
+      chatId: req.body?.chatId || 'unknown',
+      gradeLevel: req.body?.gradeLevel || 3,
+      error: errorMessage
+    });
   }
 }
