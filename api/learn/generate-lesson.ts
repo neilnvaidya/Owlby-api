@@ -1,7 +1,6 @@
 import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
 import { lessonResponseSchema } from '../../lib/ai-schemas';
 import { getLessonInstructions } from '../../lib/ai-instructions';
-import { buildAIConfig } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -64,7 +63,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: 'BadRequest',
-      model: 'gemini-2.5-flash',
+      model: 'unknown',
     });
     await flushApiLogger();
     
@@ -76,9 +75,6 @@ export default async function handler(req: any, res: any) {
     
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel);
-    
-    // Build AI configuration
-    const config = buildAIConfig(lessonResponseSchema, systemInstructions);
     
     // Create contents for AI request
     const contents = [
@@ -92,13 +88,18 @@ export default async function handler(req: any, res: any) {
       },
     ];
     
-    // Process AI request using centralized handler
-    const { responseText, usageMetadata } = await processAIRequest(
-      config, 
-      contents, 
-      'lesson', 
+    // Process AI request using centralized handler with retry and fallback
+    const { responseText, usageMetadata, modelUsed, fallbackUsed } = await processAIRequest(
+      lessonResponseSchema,
+      systemInstructions,
+      contents,
+      'lesson',
       topic
     );
+    
+    if (fallbackUsed) {
+      console.info(`⚠️ [lesson] Fallback model used: ${modelUsed}`);
+    }
     
     // Process the lesson response
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
@@ -115,7 +116,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: true,
       usageMetadata,
-      model: 'gemini-2.5-flash',
+      model: modelUsed,
     });
     await flushApiLogger();
 
@@ -132,7 +133,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model: 'gemini-2.5-flash',
+      model: 'unknown',
     });
     await flushApiLogger();
 

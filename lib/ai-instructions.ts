@@ -1,13 +1,29 @@
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
-import { gradeToAge } from './ai-config';
+import { gradeToAge, MODELS } from './ai-config';
 
 /**
  * Core AI Instructions for Owlby
- * Centralized instructions to ensure consistency across all endpoints
+ * 
+ * STRUCTURE:
+ * - Shared base instructions (used by all models for now)
+ * - Route-specific instruction builders (chat, lesson, story)
+ * - Currently model-agnostic, but structured to support model-specific instructions in the future
+ * 
+ * FUTURE EXTENSIBILITY:
+ * To add model-specific instructions, create separate instruction builders:
+ * - getChatInstructionsForPro() / getChatInstructionsForFlash()
+ * - getLessonInstructionsForPro() / getLessonInstructionsForFlash()
+ * - getStoryInstructionsForPro() / getStoryInstructionsForFlash()
+ * Then update the route handlers to select based on model.
  */
+
+// ============================================================================
+// SHARED BASE INSTRUCTIONS (Used by all models)
+// ============================================================================
 
 /**
  * Base Owlby personality and safety instructions
+ * Shared across all models and routes
  */
 const BASE_OWLBY_INSTRUCTIONS = `You are Owlby – a wise, playful, and engaging owl mentor for curious children.
 
@@ -25,14 +41,23 @@ SAFETY & CONTENT RULES:
 
 /**
  * Standard tag output rules for achievement system
+ * Shared across all models and routes
  */
 const TAG_OUTPUT_RULES = `
 TAGS OUTPUT RULES:
 - requiredCategoryTags: 1–3 UPPERCASE ENUM values from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]; these are TOPIC categories only. Do NOT include usage/behavior categories like CHAT_CHAMPION, DAILY_LEARNER, EXPLORATION_MASTER, LEARNING_STREAK.
 - optionalTags: 0–10 free-form strings for analytics; do NOT include PII.`;
 
+// ============================================================================
+// CHAT ROUTE INSTRUCTIONS
+// ============================================================================
+
 /**
  * Generate chat response instructions
+ * Currently model-agnostic (same for PRO and FLASH)
+ * 
+ * To make model-specific: Create getChatInstructionsForPro() and getChatInstructionsForFlash()
+ * and update chat route handler to select based on model parameter
  */
 export function getChatInstructions(gradeLevel: number, recentContext: string): string {
   const ageYears = gradeToAge(gradeLevel);
@@ -60,8 +85,16 @@ ${recentContext}
 Return VALID JSON only.`;
 }
 
+// ============================================================================
+// LESSON ROUTE INSTRUCTIONS
+// ============================================================================
+
 /**
  * Generate lesson creation instructions
+ * Currently model-agnostic (same for PRO and FLASH)
+ * 
+ * To make model-specific: Create getLessonInstructionsForPro() and getLessonInstructionsForFlash()
+ * and update lesson route handler to select based on model parameter
  */
 export function getLessonInstructions(topic: string, gradeLevel: number): string {
   const ageYears = gradeToAge(gradeLevel);
@@ -90,8 +123,16 @@ AGE ADAPTATION:
 Return ONLY the JSON.`;
 }
 
+// ============================================================================
+// STORY ROUTE INSTRUCTIONS
+// ============================================================================
+
 /**
  * Generate story creation instructions
+ * Currently model-agnostic (same for PRO and FLASH)
+ * 
+ * To make model-specific: Create getStoryInstructionsForPro() and getStoryInstructionsForFlash()
+ * and update story route handler to select based on model parameter
  */
 export function getStoryInstructions(prompt: string, gradeLevel: number): string {
   const ageYears = gradeToAge(gradeLevel);

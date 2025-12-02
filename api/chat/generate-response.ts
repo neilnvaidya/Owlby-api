@@ -2,7 +2,6 @@ import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 import { chatResponseSchema } from '../../lib/ai-schemas';
 import { getChatInstructions } from '../../lib/ai-instructions';
-import { buildAIConfig } from '../../lib/ai-config';
 import { 
   handleCORS, 
   processAIRequest, 
@@ -97,7 +96,7 @@ export default async function handler(req: any, res: any) {
         responseTimeMs: Date.now() - startTime,
         success: false,
         error: 'BadRequest',
-        model: 'gemini-2.5-flash',
+        model: 'unknown',
       });
       await flushApiLogger();
     }
@@ -107,6 +106,10 @@ export default async function handler(req: any, res: any) {
       chatId: chatId || 'unknown'
     });
   }
+
+  // Track model usage for logging (declared outside try/catch for scope)
+  let modelUsed = 'unknown';
+  let fallbackUsed = false;
 
   try {
     const previewMsg = messages && messages.length > 0 
@@ -123,9 +126,6 @@ export default async function handler(req: any, res: any) {
 
     const systemInstructions = getChatInstructions(gradeLevel, recentContext);
     
-    // Build AI configuration
-    const config = buildAIConfig(chatResponseSchema, systemInstructions);
-    
     // Create contents for AI request
     const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
     const contents = [
@@ -140,15 +140,22 @@ export default async function handler(req: any, res: any) {
     try {
       const aiStart = Date.now();
       
-      // Process AI request using centralized handler
-      const { responseText, usageMetadata } = await processAIRequest(
-        config, 
-        contents, 
-        'chat', 
+      // Process AI request using centralized handler with retry and fallback
+      const { responseText, usageMetadata, modelUsed: usedModel, fallbackUsed: usedFallback } = await processAIRequest(
+        chatResponseSchema,
+        systemInstructions,
+        contents,
+        'chat',
         lastUserMessage
       );
       
+      modelUsed = usedModel;
+      fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
+      
+      if (fallbackUsed) {
+        console.info(`⚠️ [chat] Fallback model used: ${modelUsed}`);
+      }
       
       // Process complete response
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
@@ -166,7 +173,7 @@ export default async function handler(req: any, res: any) {
           responseTimeMs: Date.now() - startTime,
           success: true,
           usageMetadata,
-          model: 'gemini-2.5-flash',
+          model: modelUsed,
         });
         await flushApiLogger();
       }
@@ -181,7 +188,7 @@ export default async function handler(req: any, res: any) {
           responseTimeMs: Date.now() - startTime,
           success: false,
           error: aiError.message || 'UnknownError',
-          model: 'gemini-2.5-flash',
+          model: modelUsed,
         });
         await flushApiLogger();
       }
@@ -238,7 +245,7 @@ export default async function handler(req: any, res: any) {
         responseTimeMs: Date.now() - startTime,
         success: false,
         error: error.message || 'UnknownApiError',
-        model: 'gemini-2.5-flash',
+        model: modelUsed,
       });
       await flushApiLogger();
     }

@@ -17,7 +17,35 @@ export const ai = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
-export const MODEL_NAME = 'gemini-2.5-flash';
+/**
+ * Supported Gemini Models
+ */
+export const MODELS = {
+  FLASH: 'gemini-2.5-flash',
+  PRO: 'gemini-2.5-pro',
+} as const;
+
+/**
+ * Route-specific model configuration
+ * Defines primary and fallback models for each endpoint
+ */
+export const ROUTE_MODEL_CONFIG: Record<string, {
+  primary: string;
+  fallback: string;
+}> = {
+  chat: {
+    primary: MODELS.PRO,
+    fallback: MODELS.FLASH,
+  },
+  lesson: {
+    primary: MODELS.PRO,
+    fallback: MODELS.FLASH,
+  },
+  story: {
+    primary: MODELS.PRO,
+    fallback: MODELS.FLASH,
+  },
+};
 
 /**
  * Standard safety settings for all Owlby AI endpoints
@@ -59,9 +87,33 @@ export function gradeToAge(gradeLevel: number): number {
 }
 
 /**
- * Standard configuration builder for AI requests
+ * Build AI configuration for Gemini 2.5 Pro
+ * Includes thinking budget configuration
  */
-export function buildAIConfig(
+export function buildProConfig(
+  responseSchema: any,
+  systemInstruction: string,
+  maxOutputTokens: number = 4096,
+  thinkingBudget: number = 1500
+) {
+  return {
+    safetySettings: SAFETY_SETTINGS,
+    responseMimeType: 'application/json',
+    responseSchema,
+    systemInstruction: [{ text: systemInstruction }],
+    maxOutputTokens,
+    temperature: 0.9,
+    thinkingConfig: {
+      thinkingBudget,
+    },
+  };
+}
+
+/**
+ * Build AI configuration for Gemini 2.5 Flash
+ * No thinking config (Flash does not support thinking)
+ */
+export function buildFlashConfig(
   responseSchema: any,
   systemInstruction: string,
   maxOutputTokens: number = 4096
@@ -71,10 +123,31 @@ export function buildAIConfig(
     responseMimeType: 'application/json',
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
-    // Output control parameters (must be at top level of config)
     maxOutputTokens,
-    temperature: 0.8,
+    temperature: 0.9,
+    // Note: Flash does not support thinkingConfig
   };
+}
+
+/**
+ * Build AI configuration based on model name
+ * Automatically selects the appropriate config builder
+ */
+export function buildAIConfig(
+  modelName: string,
+  responseSchema: any,
+  systemInstruction: string,
+  maxOutputTokens: number = 4096
+) {
+  if (modelName === MODELS.PRO) {
+    return buildProConfig(responseSchema, systemInstruction, maxOutputTokens);
+  } else if (modelName === MODELS.FLASH) {
+    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens);
+  } else {
+    // Default to Flash config for unknown models
+    console.warn(`Unknown model ${modelName}, defaulting to Flash config`);
+    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens);
+  }
 }
 
 /**

@@ -1,4 +1,4 @@
-import { CORS_HEADERS, ai, MODEL_NAME, buildAIConfig, logTokenUsage } from './ai-config';
+import { CORS_HEADERS, ai, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, MODELS } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
 
 /**
@@ -31,50 +31,146 @@ export function handleCORS(req: any, res: any): boolean {
 }
 
 /**
- * Standard AI request processing
+ * Check if an error should trigger fallback to secondary model
+ * Returns true for errors that won't be solved by retrying
  */
-export async function processAIRequest(
+function shouldFallback(error: any): boolean {
+  const errorMessage = error.message?.toLowerCase() || '';
+  const errorCode = error.code?.toLowerCase() || '';
+  
+  // Rate limit errors
+  if (errorMessage.includes('rate limit') || errorCode.includes('rate_limit') || errorCode === '429') {
+    return true;
+  }
+  
+  // Service unavailable errors
+  if (errorMessage.includes('service unavailable') || errorMessage.includes('not available') || 
+      errorMessage.includes('user location is not supported') || errorCode === '503') {
+    return true;
+  }
+  
+  // Model overload/overloaded errors
+  if (errorMessage.includes('overload') || errorMessage.includes('model overload') || 
+      errorMessage.includes('resource exhausted') || errorCode === '529') {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Attempt a single AI request with a specific model
+ */
+async function attemptAIRequest(
+  modelName: string,
   config: any,
   contents: any[],
   endpoint: string,
   inputText: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
-  try {
-    console.info(`🦉 [${endpoint}] → Gemini: input len=${inputText.length}`);
-    
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      config,
-      contents,
-    });
+  console.info(`🦉 [${endpoint}] → ${modelName}: input len=${inputText.length}`);
+  
+  const response = await ai.models.generateContent({
+    model: modelName,
+    config,
+    contents,
+  });
 
-    const responseText = response.text || (
-      Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
-        ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
-        : ''
-    );
+  const responseText = response.text || (
+    Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
+      ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
+      : ''
+  );
 
-    if (!responseText) {
-      console.warn(`[${endpoint}] Gemini returned empty text – full response follows`);
-      console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
-      throw new Error('Empty response from AI service');
+  if (!responseText) {
+    console.warn(`[${endpoint}] ${modelName} returned empty text – full response follows`);
+    console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
+    throw new Error('Empty response from AI service');
+  }
+
+  console.info(`🦉 [${endpoint}] ← ${modelName}: response len=${responseText.length}`);
+  console.debug(`🦉 [${endpoint}] Response preview:`, responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
+
+  // Log token usage for cost analysis
+  logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
+
+  return {
+    responseText,
+    usageMetadata: response.usageMetadata
+  };
+}
+
+/**
+ * Standard AI request processing with retry and fallback logic
+ * Attempts primary model twice, then falls back to secondary model on specific errors
+ */
+export async function processAIRequest(
+  responseSchema: any,
+  systemInstruction: string,
+  contents: any[],
+  endpoint: string,
+  inputText: string,
+  maxOutputTokens: number = 4096
+): Promise<{ 
+  responseText: string; 
+  usageMetadata: any;
+  modelUsed: string;
+  fallbackUsed: boolean;
+}> {
+  const routeConfig = ROUTE_MODEL_CONFIG[endpoint];
+  if (!routeConfig) {
+    throw new Error(`No model configuration found for endpoint: ${endpoint}`);
+  }
+
+  const { primary, fallback } = routeConfig;
+  let lastError: any = null;
+  let fallbackUsed = false;
+
+  // Attempt primary model (with one retry)
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens);
+      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText);
+      
+      return {
+        ...result,
+        modelUsed: primary,
+        fallbackUsed: false,
+      };
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`❌ [${endpoint}] Primary model (${primary}) attempt ${attempt} failed:`, error.message);
+      
+      // If this is a fallback-triggering error, don't retry primary
+      if (shouldFallback(error)) {
+        console.info(`🔄 [${endpoint}] Fallback-triggering error detected, switching to fallback model`);
+        break;
+      }
+      
+      // If this is the last attempt on primary, we'll try fallback
+      if (attempt === 2) {
+        console.info(`🔄 [${endpoint}] Primary model exhausted, switching to fallback model`);
+        break;
+      }
     }
+  }
 
-    console.info(`🦉 [${endpoint}] ← Gemini: response len=${responseText.length}`);
-    console.debug(`🦉 [${endpoint}] Response preview:`, responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
-
-    // Log token usage for cost analysis
-    logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
-
-    return {
-      responseText,
-      usageMetadata: response.usageMetadata
-    };
-
-  } catch (error: any) {
-    console.error(`❌ [${endpoint}] AI Error:`, error);
+  // Fallback to secondary model
+  try {
+    console.info(`🔄 [${endpoint}] Attempting fallback model: ${fallback}`);
+    const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens);
+    const result = await attemptAIRequest(fallback, config, contents, endpoint, inputText);
     
-    // Handle specific error types
+    console.info(`✅ [${endpoint}] Fallback model succeeded`);
+    return {
+      ...result,
+      modelUsed: fallback,
+      fallbackUsed: true,
+    };
+  } catch (error: any) {
+    console.error(`❌ [${endpoint}] Fallback model also failed:`, error);
+    
+    // Handle specific error types for final error reporting
     if (error.message && error.message.includes('User location is not supported')) {
       throw new Error('SERVICE_UNAVAILABLE_REGION');
     }
