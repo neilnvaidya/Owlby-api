@@ -54,8 +54,6 @@ export default async function handler(req: any, res: any) {
   
   // Validate required parameters
   if (!topic) {
-    console.info('❌ Missing topic');
-    
     logLessonCall({
       userId,
       gradeLevel,
@@ -71,8 +69,6 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.info('📚 [lesson] Request received for topic:', topic);
-    
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel);
     
@@ -97,10 +93,6 @@ export default async function handler(req: any, res: any) {
       topic
     );
     
-    if (fallbackUsed) {
-      console.info(`⚠️ [lesson] Fallback model used: ${modelUsed}`);
-    }
-    
     // Process the lesson response
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
     
@@ -119,8 +111,6 @@ export default async function handler(req: any, res: any) {
       model: modelUsed,
     });
     await flushApiLogger();
-
-    console.info('✅ [lesson] Successfully generated lesson for topic:', topic);
     
     return res.status(200).json(processedResponse);
     

@@ -116,8 +116,6 @@ export default async function handler(req: any, res: any) {
       ? (messages[0].text?.slice(0, 60) + (messages[0].text?.length > 60 ? '…' : '')) 
       : '';
     
-    console.info(`🦉 [chat] req chatId=${chatId} turns=${messages?.length ?? 0} firstPrompt="${previewMsg}"`);
-
     // Build system instructions using existing utility
     const recentContext = messages
       .slice(0, 3)
@@ -152,10 +150,6 @@ export default async function handler(req: any, res: any) {
       modelUsed = usedModel;
       fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
-      
-      if (fallbackUsed) {
-        console.info(`⚠️ [chat] Fallback model used: ${modelUsed}`);
-      }
       
       // Process complete response
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
@@ -219,16 +213,6 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const totalMs = Date.now() - startTime;
-    console.info(`✅ [chat] done chatId=${chatId} ok=${processedResponse?.success ?? true} total=${totalMs}ms (AI ${aiDurationMs}ms)`);
-    
-    // Log full response being sent to client (for debugging truncation issues)
-    const mainTextLen = processedResponse?.response_text?.main?.length ?? 0;
-    const followUpLen = processedResponse?.response_text?.follow_up?.length ?? 0;
-    console.info(`📤 [chat] SENDING response: main=${mainTextLen} chars, follow_up=${followUpLen} chars`);
-    console.info(`📤 [chat] FULL_MAIN_TEXT:`, processedResponse?.response_text?.main);
-    console.info(`📤 [chat] FULL_FOLLOW_UP:`, processedResponse?.response_text?.follow_up);
-    
     if (ENABLE_API_LOGGING) {
       await flushApiLogger();
     }

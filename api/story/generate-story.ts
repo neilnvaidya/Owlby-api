@@ -50,8 +50,6 @@ export default async function handler(req: any, res: any) {
   
   // Validate required parameters
   if (!prompt) {
-    console.info('❌ Missing story prompt');
-    
     logStoryCall({
       userId,
       gradeLevel,
@@ -67,8 +65,6 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    console.info('📖 [story] Request received for prompt:', prompt);
-    
     // Build system instructions
     const systemInstructions = getStoryInstructions(prompt, gradeLevel);
     
@@ -93,10 +89,6 @@ export default async function handler(req: any, res: any) {
       prompt
     );
     
-    if (fallbackUsed) {
-      console.info(`⚠️ [story] Fallback model used: ${modelUsed}`);
-    }
-    
     // Process the story response
     const processedResponse = processStoryResponse(responseText, prompt, gradeLevel);
     
@@ -115,8 +107,6 @@ export default async function handler(req: any, res: any) {
       model: modelUsed,
     });
     await flushApiLogger();
-
-    console.info('✅ [story] Successfully generated story for prompt:', prompt);
     
     return res.status(200).json(processedResponse);
     

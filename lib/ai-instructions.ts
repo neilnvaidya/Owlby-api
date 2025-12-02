@@ -70,6 +70,9 @@ OUTPUT RULES (MUST COMPLY):
 1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
 2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
 3. response_text.main: 2–3 paragraphs (300-800 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
+   - Use markdown formatting: **bold** important keywords, terms, or concepts (e.g., "The **Sun** is a star" or "**gravity** keeps planets in orbit")
+   - Bold key scientific terms, names of planets, animals, historical figures, or important concepts
+   - Keep bolding natural and educational - don't overuse it
 4. response_text.follow_up: ONE complete engaging follow-up question (50-150 characters). MUST be a complete sentence ending with a question mark.
 5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
 6. interactive_elements.learn_more: include when deeper exploration makes sense (prompt + optional tags).
@@ -107,6 +110,9 @@ LESSON STRUCTURE:
 1. title – ≤50 chars, catchy, no quotes
 2. introduction – ONE clear sentence that hooks interest
 3. body – 1–4 short paragraphs, 100-250 characters each, scaling with user profile (array of strings)
+   - Use markdown formatting: **bold** important keywords, scientific terms, or key concepts in each paragraph
+   - Bold terms that are defined in the keywords section or are central to understanding the topic
+   - Keep bolding natural and educational - typically 1-3 bolded terms per paragraph
 4. conclusion – single wrap-up sentence
 5. keyPoints – 2–5 bullet strings
 6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons

@@ -68,8 +68,6 @@ async function attemptAIRequest(
   endpoint: string,
   inputText: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
-  console.info(`🦉 [${endpoint}] → ${modelName}: input len=${inputText.length}`);
-  
   const response = await ai.models.generateContent({
     model: modelName,
     config,
@@ -83,15 +81,11 @@ async function attemptAIRequest(
   );
 
   if (!responseText) {
-    console.warn(`[${endpoint}] ${modelName} returned empty text – full response follows`);
-    console.debug(JSON.stringify(response, null, 2).slice(0, 500) + '…');
+    console.warn(`[${endpoint}] ${modelName} returned empty text`);
     throw new Error('Empty response from AI service');
   }
 
-  console.info(`🦉 [${endpoint}] ← ${modelName}: response len=${responseText.length}`);
-  console.debug(`🦉 [${endpoint}] Response preview:`, responseText.slice(0, 120) + (responseText.length > 120 ? '…' : ''));
-
-  // Log token usage for cost analysis
+  // Log token usage for cost analysis (only in development)
   logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
 
   return {
@@ -139,17 +133,14 @@ export async function processAIRequest(
       };
     } catch (error: any) {
       lastError = error;
-      console.warn(`❌ [${endpoint}] Primary model (${primary}) attempt ${attempt} failed:`, error.message);
       
       // If this is a fallback-triggering error, don't retry primary
       if (shouldFallback(error)) {
-        console.info(`🔄 [${endpoint}] Fallback-triggering error detected, switching to fallback model`);
         break;
       }
       
       // If this is the last attempt on primary, we'll try fallback
       if (attempt === 2) {
-        console.info(`🔄 [${endpoint}] Primary model exhausted, switching to fallback model`);
         break;
       }
     }
@@ -157,18 +148,17 @@ export async function processAIRequest(
 
   // Fallback to secondary model
   try {
-    console.info(`🔄 [${endpoint}] Attempting fallback model: ${fallback}`);
     const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens);
     const result = await attemptAIRequest(fallback, config, contents, endpoint, inputText);
     
-    console.info(`✅ [${endpoint}] Fallback model succeeded`);
+    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback} succeeded`);
     return {
       ...result,
       modelUsed: fallback,
       fallbackUsed: true,
     };
   } catch (error: any) {
-    console.error(`❌ [${endpoint}] Fallback model also failed:`, error);
+    console.error(`❌ [${endpoint}] Both models failed. Last error:`, error.message);
     
     // Handle specific error types for final error reporting
     if (error.message && error.message.includes('User location is not supported')) {
@@ -233,7 +223,7 @@ export function createErrorResponse(
   endpoint: string, 
   context: Record<string, any> = {}
 ): { status: number; body: any } {
-  console.error(`❌ [${endpoint}] Error:`, error);
+  console.error(`❌ [${endpoint}]`, error.message || error);
 
   const errorMessage = error.message || 'UnknownError';
 
