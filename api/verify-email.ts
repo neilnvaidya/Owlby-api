@@ -45,6 +45,25 @@ async function markUserVerified(userId: string, accessToken: string) {
   }
 }
 
+async function findUserIdByEmail(email: string, accessToken: string): Promise<string | null> {
+  const res = await fetch(`https://${AUTH0_DOMAIN}/api/v2/users-by-email?email=${encodeURIComponent(email)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Failed to lookup user by email: ${err}`);
+  }
+
+  const users = await res.json();
+  if (Array.isArray(users) && users.length > 0 && users[0].user_id) {
+    return users[0].user_id as string;
+  }
+  return null;
+}
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -99,14 +118,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       console.info('✅ Email verification successful for:', email || user_id);
 
       // Mark user verified in Auth0 to ensure server-side truth
-      if (user_id && typeof user_id === 'string') {
-        try {
-          const mgmtToken = await getManagementToken();
-          await markUserVerified(user_id, mgmtToken);
-          console.info('🔒 Auth0 user marked verified:', user_id);
-        } catch (err) {
-          console.error('❌ Failed to mark Auth0 user verified:', err);
+      try {
+        const mgmtToken = await getManagementToken();
+        let resolvedUserId = typeof user_id === 'string' ? user_id : null;
+
+        if (!resolvedUserId && typeof email === 'string') {
+          resolvedUserId = await findUserIdByEmail(email, mgmtToken);
         }
+
+        if (resolvedUserId) {
+          await markUserVerified(resolvedUserId, mgmtToken);
+          console.info('🔒 Auth0 user marked verified:', resolvedUserId);
+        } else {
+          console.warn('⚠️ Could not resolve user_id to mark verified');
+        }
+      } catch (err) {
+        console.error('❌ Failed to mark Auth0 user verified:', err);
       }
 
       if (isMobile) {
