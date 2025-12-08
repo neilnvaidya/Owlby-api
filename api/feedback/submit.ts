@@ -156,6 +156,35 @@ export default async function handler(req: any, res: any) {
       created_at: new Date().toISOString()
     };
 
+    // Safe, non-PII debug trace
+    console.info('[feedback] insert', {
+      has_auth: !!authHeader,
+      user_id_present: !!user_id,
+      is_anonymous,
+      feedback_type,
+      category: validatedCategory,
+      ratings: {
+        overall_rating: ratings.overall_rating ?? null,
+        ease_of_use_rating: ratings.ease_of_use_rating ?? null,
+        content_quality_rating: ratings.content_quality_rating ?? null,
+        safety_comfort_rating: ratings.safety_comfort_rating ?? null,
+      },
+      text_lengths: {
+        what_you_like: text_responses.what_you_like?.length || 0,
+        what_needs_improvement: text_responses.what_needs_improvement?.length || 0,
+        feature_suggestions: text_responses.feature_suggestions?.length || 0,
+        learning_goals: text_responses.learning_goals?.length || 0,
+        additional_comments: text_responses.additional_comments?.length || 0,
+      },
+      context_summary: {
+        device_type: context.device_type,
+        app_version: context.app_version,
+        usage_frequency: context.usage_frequency || null,
+        child_age_present: context.child_age !== undefined && context.child_age !== null,
+        session_context_present: !!context.session_context,
+      },
+    });
+
     // Insert into Supabase
     const { data, error } = await supabase
       .from('feedback')
