@@ -18,13 +18,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
     
-    console.info('📝 Onboarding profile update request:', { 
-      name: name?.slice(0, 10) + '...', 
-      age, 
-      userId: userId?.slice(0, 15) + '...', 
-      hasAuth: !!authHeader 
-    });
-    
     // Validate authorization
     if (!token) {
       return res.status(401).json({ 
@@ -47,10 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     // Ensure the userId matches the token (security check)
     if (auth0UserId !== userId) {
-      console.warn('⚠️ Security: User ID mismatch in onboarding request:', { 
-        tokenUserId: auth0UserId, 
-        requestUserId: userId 
-      });
+      console.warn('⚠️ Security: User ID mismatch in onboarding request');
       return res.status(403).json({ 
         error: 'forbidden',
         message: 'User ID mismatch' 
@@ -70,12 +60,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       interests: [],
       achievements: []
     };
-
-    console.info('📊 Onboarding data transformation:', {
-      originalAge: ageNum,
-      estimatedGradeLevel,
-      name: onboardingData.name.slice(0, 10) + '...'
-    });
 
     // Use the existing profile update logic
     const result = await updateOnboardingProfile(auth0UserId, decoded, onboardingData, res);

@@ -120,7 +120,6 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
     }
     
     // If user doesn't exist yet, return null to indicate they need onboarding
-    console.log('User not found in database - needs onboarding');
     return res.status(404).json({ 
       error: 'User profile not found',
       needsOnboarding: true 
@@ -135,9 +134,8 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
 // POST profile update handler
 async function updateProfile(auth0UserId: string, decoded: any, updateData: ProfileUpdateRequest, res: VercelResponse) {
   try {
-    console.log('Updating profile for user:', auth0UserId, 'with data:', Object.keys(updateData));
-    console.log('📧 Received email in updateData:', updateData.email);
-    console.log('📧 Decoded email from JWT:', decoded.email);
+    // Log keys only to avoid PII
+    console.info('Updating profile fields:', Object.keys(updateData || {}));
     
     // Check if user exists
     const { data: existingUser, error: checkError } = await supabase
@@ -158,7 +156,7 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     if (updateData.name) validatedData.name = String(updateData.name).slice(0, 100);
     if (updateData.email) {
       validatedData.email = String(updateData.email).slice(0, 255);
-      console.log('📧 Email from onboarding data:', updateData.email);
+      // Do not log email values
     }
     if (updateData.parent_email) validatedData.parent_email = String(updateData.parent_email).slice(0, 255);
     if (typeof updateData.age === 'number') validatedData.age = Math.min(Math.max(5, updateData.age), 18);
@@ -206,7 +204,7 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     
     // Update or insert user record
     if (existingUser) {
-      console.log('Updating existing user');
+      console.info('Updating existing user');
       // Update existing user
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
@@ -222,13 +220,12 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
       
       // Return updated comprehensive profile
       const profile: UserProfile = buildProfileFromDbData(updatedUser, decoded);
-      console.log('User updated successfully');
+      console.info('User updated successfully');
       return res.status(200).json(profile);
       
     } else {
-      console.log('Creating new user');
+      console.info('Creating new user');
       // Insert new user
-      console.log('📧 Creating new user with email:', validatedData.email || decoded.email || '');
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
@@ -248,7 +245,7 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
       
       // Return new comprehensive profile
       const profile: UserProfile = buildProfileFromDbData(newUser, decoded);
-      console.log('New user created successfully');
+      console.info('New user created successfully');
       return res.status(200).json(profile);
     }
   } catch (error) {

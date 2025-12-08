@@ -31,6 +31,7 @@ interface LogEntry {
   timestamp: string;
   route: string;
   user_id?: string;
+  session_id?: string;
   chat_id?: string;
   grade_level: number;
   model: string;
@@ -42,6 +43,9 @@ interface LogEntry {
   response_time_ms: number;
   success: boolean;
   error_type?: string;
+  input_cost: number;
+  output_cost: number;
+  total_cost: number;
   exact_cost: number;
 }
 
@@ -62,7 +66,8 @@ class APILoggingService {
 
   // Gemini pricing per 1M tokens (update as needed)
   private readonly PRICING = {
-    'gemini-2.5-flash': { input: 0.30, output: 2.50 }
+    'gemini-2.5-flash': { input: 0.30, output: 2.50 },
+    'gemini-2.5-pro': { input: 1.25, output: 2.50 },
   };
   
   constructor() {
@@ -79,7 +84,8 @@ class APILoggingService {
       const inputTokens = data.geminiUsageMetadata?.promptTokenCount || 0;
       const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0;
       const totalTokens = data.geminiUsageMetadata?.totalTokenCount || 0;
-      const exactCost = this.calculateCost(inputTokens, outputTokens, modelName);
+      const { inputCost, outputCost, totalCost } = this.calculateCostBreakdown(inputTokens, outputTokens, modelName);
+      const exactCost = totalCost;
       
       // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs 
       console.info(`💰 [${data.route.toUpperCase()}] TOKEN USAGE & COST BREAKDOWN:`, {
@@ -111,9 +117,9 @@ class APILoggingService {
         
         // COST BREAKDOWN
         cost_breakdown: {
-          input_cost_usd: ((inputTokens / 1_000_000) * this.PRICING[modelName].input).toFixed(6),
-          output_cost_usd: ((outputTokens / 1_000_000) * this.PRICING[modelName].output).toFixed(6),
-          total_cost_usd: exactCost.toFixed(6),
+          input_cost_usd: inputCost.toFixed(6),
+          output_cost_usd: outputCost.toFixed(6),
+          total_cost_usd: totalCost.toFixed(6),
           cost_per_1k_tokens: totalTokens > 0 ? ((exactCost / totalTokens) * 1000).toFixed(6) : 'N/A'
         },
         
@@ -145,6 +151,7 @@ class APILoggingService {
         timestamp: new Date().toISOString(),
         route: data.route,
         user_id: data.userId,
+        session_id: undefined,
         chat_id: data.chatId,
         grade_level: data.gradeLevel,
         model: data.model,
@@ -156,6 +163,9 @@ class APILoggingService {
         response_time_ms: data.responseTimeMs,
         success: data.success,
         error_type: data.error,
+        input_cost: inputCost,
+        output_cost: outputCost,
+        total_cost: totalCost,
         exact_cost: exactCost
       };
 
@@ -170,10 +180,12 @@ class APILoggingService {
     }
   }
 
-  private calculateCost(inputTokens: number, outputTokens: number, model: keyof typeof this.PRICING): number {
-    const rates = this.PRICING['gemini-2.5-flash'];
-    const cost = ((inputTokens / 1_000_000) * rates.input) + ((outputTokens / 1_000_000) * rates.output);
-    return cost;
+  private calculateCostBreakdown(inputTokens: number, outputTokens: number, model: keyof typeof this.PRICING) {
+    const rates = this.PRICING[model];
+    const inputCost = (inputTokens / 1_000_000) * rates.input;
+    const outputCost = (outputTokens / 1_000_000) * rates.output;
+    const totalCost = inputCost + outputCost;
+    return { inputCost, outputCost, totalCost };
   }
 
   private async flushToSupabase(): Promise<void> {

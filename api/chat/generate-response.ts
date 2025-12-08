@@ -8,6 +8,8 @@ import {
   normalizeAchievementTags, 
   createErrorResponse 
 } from '../../lib/api-handler';
+import { verifyToken } from '../../lib/auth';
+import { checkRateLimit } from '../../lib/rate-limit';
 
 // Toggle Supabase API logging
 const ENABLE_API_LOGGING = false;
@@ -81,7 +83,30 @@ export default async function handler(req: any, res: any) {
   const startTime = Date.now();
   let aiDurationMs = 0;
 
-  const { messages, chatId, gradeLevel = 3, userId, sessionMemory } = req.body;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Missing authorization token',
+      userMessage: 'Please sign in again.',
+    });
+  }
+
+  let decoded: any;
+  try {
+    decoded = await verifyToken(token);
+  } catch (error: any) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid token',
+      userMessage: 'Session expired. Please sign in again.',
+    });
+  }
+
+  const userId = decoded?.sub || 'unknown';
+  const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
 
   // Validate required parameters
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
@@ -99,8 +124,7 @@ export default async function handler(req: any, res: any) {
       await flushApiLogger();
     }
     
-    // Return graceful error response (200 status to prevent system popups)
-    return res.status(200).json({
+    return res.status(400).json({
       success: false,
       response_text: {
         main: "I'm having trouble understanding that. Could you try asking again?",
@@ -114,6 +138,27 @@ export default async function handler(req: any, res: any) {
       chatId: chatId || 'unknown',
       gradeLevel,
       error: "Invalid request. Please try again."
+    });
+  }
+
+  // Basic per-user rate limiting to reduce spamming
+  const rate = checkRateLimit(`chat:${userId}`, 10, 60 * 1000);
+  if (!rate.allowed) {
+    return res.status(429).json({
+      success: false,
+      response_text: {
+        main: "I'm answering lots of questions right now. Let's pause for a moment.",
+        follow_up: "Try again in a few seconds?",
+      },
+      interactive_elements: {
+        followup_buttons: ["Try again soon"],
+        learn_more: { prompt: "", tags: [] },
+        story_button: { title: "", story_prompt: "" }
+      },
+      chatId: chatId || 'unknown',
+      gradeLevel,
+      error: "Too many requests",
+      retryAfterMs: rate.retryAfterMs,
     });
   }
 
@@ -251,7 +296,7 @@ export default async function handler(req: any, res: any) {
       ? "I'm not available in your region right now. Please try again later."
       : "I'm having trouble processing that right now. Can you try asking something else?";
     
-    return res.status(200).json({
+    return res.status(500).json({
       success: false,
       response_text: {
         main: userFriendlyMessage,

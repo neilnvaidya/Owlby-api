@@ -7,6 +7,8 @@ import {
   normalizeAchievementTags, 
   createErrorResponse 
 } from '../../lib/api-handler';
+import { verifyToken } from '../../lib/auth';
+import { checkRateLimit } from '../../lib/rate-limit';
 
 /**
  * Process the JSON response from story generation API
@@ -46,7 +48,30 @@ export default async function handler(req: any, res: any) {
   if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
-  const { prompt, gradeLevel = 3, userId } = req.body;
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace('Bearer ', '');
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Missing authorization token',
+      userMessage: 'Please sign in again.',
+    });
+  }
+
+  let decoded: any;
+  try {
+    decoded = await verifyToken(token);
+  } catch (error: any) {
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid token',
+      userMessage: 'Session expired. Please sign in again.',
+    });
+  }
+
+  const userId = decoded?.sub || 'unknown';
+  const { prompt, gradeLevel = 3 } = req.body;
   
   // Validate required parameters
   if (!prompt) {
@@ -61,12 +86,22 @@ export default async function handler(req: any, res: any) {
     });
     await flushApiLogger();
     
-    // Return graceful error response (200 status to prevent system popups)
-    return res.status(200).json({
+    return res.status(400).json({
       success: false,
       error: "Please provide a story prompt.",
       userMessage: "Please provide a story prompt.",
       prompt: prompt || null
+    });
+  }
+
+  // Basic per-user rate limiting to reduce spamming
+  const rate = checkRateLimit(`story:${userId}`, 8, 60 * 1000);
+  if (!rate.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: "Too many requests",
+      userMessage: "I'm writing lots of stories right now. Let's pause for a moment.",
+      retryAfterMs: rate.retryAfterMs,
     });
   }
 
@@ -138,6 +173,6 @@ export default async function handler(req: any, res: any) {
       prompt: req.body?.prompt 
     });
     
-    return res.status(errorResponse.status).json(errorResponse.body);
+    return res.status(errorResponse.status === 200 ? 500 : errorResponse.status).json(errorResponse.body);
   }
 }

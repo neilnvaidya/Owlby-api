@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const decoded: any = await verifyToken(token);
     const auth0UserId = decoded.sub;
     
-    console.log('Starting account deletion for user:', auth0UserId);
+    console.info('Starting account deletion');
     
     // Step 1: Delete user from Supabase
     try {
@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.error('Supabase deletion error:', supabaseError);
         // Continue with Auth0 deletion even if Supabase fails
       } else {
-        console.log('Successfully deleted user from Supabase');
+        console.info('Deleted user from Supabase');
       }
     } catch (supabaseError) {
       console.error('Supabase deletion failed:', supabaseError);
@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         throw new Error(`Auth0 deletion failed: ${deleteResponse.status}`);
       }
       
-      console.log('Successfully deleted user from Auth0');
+      console.info('Deleted user from Auth0');
     } catch (auth0Error) {
       console.error('Auth0 deletion failed:', auth0Error);
       return res.status(500).json({ 
@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     
-    console.log('Account deletion completed successfully for user:', auth0UserId);
+    console.info('Account deletion completed successfully');
     return res.status(200).json({ 
       success: true, 
       message: 'Account successfully deleted' 
