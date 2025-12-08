@@ -5,6 +5,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const webBaseUrl = process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://owlby.com';
+
   try {
     const { 
       user_id, 
@@ -56,8 +58,8 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         const deepLinkUrl = new URL('owlby://auth/verify-email');
         deepLinkUrl.searchParams.set('success', 'true');
         deepLinkUrl.searchParams.set('message', 'Email verified successfully!');
-        deepLinkUrl.searchParams.set('verification_ticket', verification_ticket as string || '');
-        deepLinkUrl.searchParams.set('token', token as string || '');
+        if (verification_ticket) deepLinkUrl.searchParams.set('ticket', verification_ticket as string);
+        if (token) deepLinkUrl.searchParams.set('token', token as string);
         if (email && typeof email === 'string') {
           deepLinkUrl.searchParams.set('email', email);
         }
@@ -71,7 +73,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Email Verified! 🎉</title>
+  <title>Email Verified</title>
   <style>
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -92,7 +94,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       padding: 30px;
       max-width: 400px;
     }
-    .icon { font-size: 60px; margin-bottom: 20px; }
     h1 { margin: 0 0 10px 0; font-size: 24px; }
     p { margin: 10px 0; opacity: 0.9; line-height: 1.5; }
     .button {
@@ -109,7 +110,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 </head>
 <body>
   <div class="container">
-    <div class="icon">🎉</div>
     <h1>Email Verified!</h1>
     <p>Your email has been successfully verified. Opening Owlby now...</p>
     <p><a href="${deepLinkUrl.toString()}" class="button">Open Owlby App</a></p>
@@ -130,7 +130,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         `);
       } else {
         // Web redirect for non-mobile devices
-      const redirectUrl = new URL('/verify-email', 'https://www.owlby.com');
+      const redirectUrl = new URL('/verify-email', webBaseUrl);
       redirectUrl.searchParams.set('success', 'true');
       redirectUrl.searchParams.set('message', 'Email verified successfully!');
       if (email && typeof email === 'string') {
@@ -142,7 +142,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       }
       
     } else {
-      console.info('❌ Email verification failed for:', email || user_id);
+    console.info('❌ Email verification failed for:', email || user_id);
       
       if (isMobile) {
         // Deep link to mobile app for failed verification
@@ -185,7 +185,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       padding: 30px;
       max-width: 400px;
     }
-    .icon { font-size: 60px; margin-bottom: 20px; }
     h1 { margin: 0 0 10px 0; font-size: 24px; }
     p { margin: 10px 0; opacity: 0.9; line-height: 1.5; }
     .button {
@@ -202,7 +201,6 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 </head>
 <body>
   <div class="container">
-    <div class="icon">⚠️</div>
     <h1>Verification Issue</h1>
     <p>There was a problem verifying your email. Let's try again in the app.</p>
     <p><a href="${deepLinkUrl.toString()}" class="button">Open Owlby App</a></p>
@@ -223,7 +221,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         `);
       } else {
         // Web redirect for non-mobile devices
-      const redirectUrl = new URL('/verify-email', process.env.NEXT_PUBLIC_APP_URL);
+      const redirectUrl = new URL('/verify-email', webBaseUrl);
       redirectUrl.searchParams.set('success', 'false');
       redirectUrl.searchParams.set('message', 
         (typeof message === 'string' ? message : null) || 'Email verification failed'
@@ -317,7 +315,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       `);
     } else {
       // Web redirect for non-mobile devices
-    const redirectUrl = new URL('/verify-email', process.env.NEXT_PUBLIC_APP_URL);
+      const redirectUrl = new URL('/verify-email', webBaseUrl);
     redirectUrl.searchParams.set('success', 'false');
     redirectUrl.searchParams.set('message', 'Verification service error');
     
