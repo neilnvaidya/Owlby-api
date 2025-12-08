@@ -1,8 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
 const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || process.env.NEXT_PUBLIC_AUTH0_DOMAIN;
-const AUTH0_MGMT_CLIENT_ID = process.env.AUTH0_MGMT_CLIENT_ID;
-const AUTH0_MGMT_CLIENT_SECRET = process.env.AUTH0_MGMT_CLIENT_SECRET;
+// Use the primary Auth0 app credentials for Management API token requests
+const AUTH0_MGMT_CLIENT_ID = process.env.AUTH0_CLIENT_ID;
+const AUTH0_MGMT_CLIENT_SECRET = process.env.AUTH0_CLIENT_SECRET;
 
 async function getManagementToken() {
   if (!AUTH0_DOMAIN || !AUTH0_MGMT_CLIENT_ID || !AUTH0_MGMT_CLIENT_SECRET) {
@@ -78,6 +79,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_verified, 
       success, 
       token,
+      // Some templates send the ticket as a top-level param
+      ticket,
       // Auth0 might send these parameters
       verification_ticket,
       result_url,
@@ -93,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       email_verified,
       success,
       token,
+      ticket,
       verification_ticket,
       result_url,
       message,
@@ -112,7 +116,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const isSuccess = success === 'true' || 
                      email_verified === 'true' || 
                      verification_ticket || 
-                     token;
+                     token ||
+                     ticket;
 
     if (isSuccess) {
       console.info('✅ Email verification successful for:', email || user_id);
@@ -141,7 +146,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const deepLinkUrl = new URL('owlby://auth/verify-email');
         deepLinkUrl.searchParams.set('success', 'true');
         deepLinkUrl.searchParams.set('message', 'Email verified successfully!');
-        if (verification_ticket) deepLinkUrl.searchParams.set('ticket', verification_ticket as string);
+        if (verification_ticket) deepLinkUrl.searchParams.set('verification_ticket', verification_ticket as string);
+        if (ticket) deepLinkUrl.searchParams.set('ticket', ticket as string);
         if (token) deepLinkUrl.searchParams.set('token', token as string);
         if (email && typeof email === 'string') {
           deepLinkUrl.searchParams.set('email', email);
