@@ -1,6 +1,51 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || process.env.NEXT_PUBLIC_AUTH0_DOMAIN;
+const AUTH0_MGMT_CLIENT_ID = process.env.AUTH0_MGMT_CLIENT_ID;
+const AUTH0_MGMT_CLIENT_SECRET = process.env.AUTH0_MGMT_CLIENT_SECRET;
+
+async function getManagementToken() {
+  if (!AUTH0_DOMAIN || !AUTH0_MGMT_CLIENT_ID || !AUTH0_MGMT_CLIENT_SECRET) {
+    throw new Error('Auth0 management credentials are missing');
+  }
+
+  const response = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'client_credentials',
+      client_id: AUTH0_MGMT_CLIENT_ID,
+      client_secret: AUTH0_MGMT_CLIENT_SECRET,
+      audience: `https://${AUTH0_DOMAIN}/api/v2/`,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Failed to obtain management token: ${err}`);
+  }
+
+  const data = await response.json();
+  return data.access_token as string;
+}
+
+async function markUserVerified(userId: string, accessToken: string) {
+  const res = await fetch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ email_verified: true }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Failed to mark user verified: ${err}`);
+  }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -52,7 +97,18 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
 
     if (isSuccess) {
       console.info('✅ Email verification successful for:', email || user_id);
-      
+
+      // Mark user verified in Auth0 to ensure server-side truth
+      if (user_id && typeof user_id === 'string') {
+        try {
+          const mgmtToken = await getManagementToken();
+          await markUserVerified(user_id, mgmtToken);
+          console.info('🔒 Auth0 user marked verified:', user_id);
+        } catch (err) {
+          console.error('❌ Failed to mark Auth0 user verified:', err);
+        }
+      }
+
       if (isMobile) {
         // Deep link to mobile app for successful verification
         const deepLinkUrl = new URL('owlby://auth/verify-email');
@@ -62,6 +118,9 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
         if (token) deepLinkUrl.searchParams.set('token', token as string);
         if (email && typeof email === 'string') {
           deepLinkUrl.searchParams.set('email', email);
+        }
+        if (user_id && typeof user_id === 'string') {
+          deepLinkUrl.searchParams.set('user_id', user_id);
         }
         
         console.info('📱 Redirecting to mobile app via deep link:', deepLinkUrl.toString());
