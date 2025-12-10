@@ -1,12 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase } from '../lib/supabase';
-import { verifyToken } from '../lib/auth';
-
-// Auth0 Management API configuration
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || '';
-const AUTH0_CLIENT_ID = process.env.AUTH0_CLIENT_ID || '';
-const AUTH0_CLIENT_SECRET = process.env.AUTH0_CLIENT_SECRET || '';
-const AUTH0_MANAGEMENT_AUDIENCE = `https://${AUTH0_DOMAIN}/api/v2/`;
+import { verifySupabaseToken } from '../lib/auth-supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Only allow DELETE method
@@ -24,56 +18,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   
   try {
     // Verify token and get user info
-    const decoded: any = await verifyToken(token);
-    const auth0UserId = decoded.sub;
+    const decoded: any = await verifySupabaseToken(token);
+    const authUid = decoded.id;
     
     console.info('Starting account deletion');
     
-    // Step 1: Delete user from Supabase
+    // Delete user from Supabase
     try {
       const { error: supabaseError } = await supabase
         .from('users')
         .delete()
-        .eq('auth0_id', auth0UserId);
+      .eq('auth_uid', authUid);
       
       if (supabaseError) {
         console.error('Supabase deletion error:', supabaseError);
-        // Continue with Auth0 deletion even if Supabase fails
+        // Proceed even if Supabase deletion fails
       } else {
         console.info('Deleted user from Supabase');
       }
     } catch (supabaseError) {
       console.error('Supabase deletion failed:', supabaseError);
-      // Continue with Auth0 deletion even if Supabase fails
-    }
-    
-    // Step 2: Delete user from Auth0
-    try {
-      // Get Auth0 Management API access token
-      const managementToken = await getAuth0ManagementToken();
-      
-      // Delete user from Auth0
-      const deleteResponse = await fetch(`https://${AUTH0_DOMAIN}/api/v2/users/${encodeURIComponent(auth0UserId)}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${managementToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (!deleteResponse.ok) {
-        const errorText = await deleteResponse.text();
-        console.error('Auth0 deletion error:', deleteResponse.status, errorText);
-        throw new Error(`Auth0 deletion failed: ${deleteResponse.status}`);
-      }
-      
-      console.info('Deleted user from Auth0');
-    } catch (auth0Error) {
-      console.error('Auth0 deletion failed:', auth0Error);
-      return res.status(500).json({ 
-        error: 'Failed to delete account from authentication system',
-        details: auth0Error instanceof Error ? auth0Error.message : 'Unknown error'
-      });
+      // Proceed even if Supabase deletion fails
     }
     
     console.info('Account deletion completed successfully');
@@ -90,28 +55,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
-
-// Helper function to get Auth0 Management API access token
-async function getAuth0ManagementToken(): Promise<string> {
-  const tokenResponse = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      client_id: AUTH0_CLIENT_ID,
-      client_secret: AUTH0_CLIENT_SECRET,
-      audience: AUTH0_MANAGEMENT_AUDIENCE,
-      grant_type: 'client_credentials',
-    }),
-  });
-  
-  if (!tokenResponse.ok) {
-    const errorText = await tokenResponse.text();
-    console.error('Auth0 Management API token error:', tokenResponse.status, errorText);
-    throw new Error(`Failed to get Auth0 Management API token: ${tokenResponse.status}`);
-  }
-  
-  const tokenData = await tokenResponse.json();
-  return tokenData.access_token;
-} 

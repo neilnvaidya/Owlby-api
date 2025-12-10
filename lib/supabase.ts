@@ -15,7 +15,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 // Define database schema types
 export type User = {
   id: number;
-  auth0_id: string;
+  auth_uid: string;
   name: string;
   email: string;
   avatar_url: string | null;

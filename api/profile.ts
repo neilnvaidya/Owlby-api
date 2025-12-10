@@ -1,28 +1,25 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { UserProfile, ProfileUpdateRequest, createMockUserProfile } from '../lib/profile-types';
 import { supabase } from '../lib/supabase';
-import { verifyToken } from '../lib/auth';
+import { verifySupabaseToken } from '../lib/auth-supabase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Extract token from Authorization header
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace('Bearer ', '');
-  
-  if (!token) {
-    return res.status(401).json({ error: 'Missing or invalid token' });
-  }
-  
   try {
-    // Verify token and get user info
-    const decoded: any = await verifyToken(token);
-    const auth0UserId = decoded.sub;
-    
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'Missing or invalid token' });
+    }
+
+    const user = await verifySupabaseToken(token);
+    const authUid = user.id;
+
     // Handle different HTTP methods
     switch (req.method) {
       case 'GET':
-        return await getProfile(auth0UserId, decoded, res);
+        return await getProfile(authUid, user, res);
       case 'POST':
-        return await updateProfile(auth0UserId, decoded, req.body, res);
+        return await updateProfile(authUid, user, req.body, res);
       default:
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -33,15 +30,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 
 // GET profile handler
-async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse) {
+async function getProfile(authUid: string, decoded: any, res: VercelResponse) {
   try {
-    console.log('Getting profile for user:', auth0UserId);
+    console.log('Getting profile for user:', authUid);
     
     // Check if user exists in database
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
-      .eq('auth0_id', auth0UserId)
+      .eq('auth_uid', authUid)
       .single();
     
     if (userError && userError.code !== 'PGRST116') { // PGRST116 is "not found"
@@ -55,11 +52,13 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
       
       const profile: UserProfile = {
         // Core identity
-        user_id: auth0UserId,
-        auth0_id: auth0UserId,
+        user_id: authUid,
+        auth_uid: authUid,
+          auth_uid: authUid,
         email: decoded.email || userData.email || '',
         name: userData.name || decoded.name || '',
         picture: userData.avatar_url || decoded.picture || undefined,
+        email_verified_at: userData.email_verified_at || null,
         
         // Basic profile info
         age: userData.age || undefined,
@@ -106,6 +105,7 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
         updated_at: userData.updated_at || new Date().toISOString(),
         last_login_at: userData.last_login_at || undefined,
         onboarding_completed: userData.onboarding_completed || false,
+        onboarding_completed_at: userData.onboarding_completed_at || null,
         profile_completed: userData.profile_completed || false,
         
         // Analytics data
@@ -132,7 +132,7 @@ async function getProfile(auth0UserId: string, decoded: any, res: VercelResponse
 }
 
 // POST profile update handler
-async function updateProfile(auth0UserId: string, decoded: any, updateData: ProfileUpdateRequest, res: VercelResponse) {
+async function updateProfile(authUid: string, decoded: any, updateData: ProfileUpdateRequest, res: VercelResponse) {
   try {
     // Log keys only to avoid PII
     console.info('Updating profile fields:', Object.keys(updateData || {}));
@@ -141,7 +141,7 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('*')
-      .eq('auth0_id', auth0UserId)
+      .eq('auth_uid', authUid)
       .single();
     
     if (checkError && checkError.code !== 'PGRST116') {
@@ -164,7 +164,12 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
     if (Array.isArray(updateData.interests)) validatedData.interests = updateData.interests.map(String).slice(0, 20);
     
     // Profile completion flags
-    if (typeof updateData.onboarding_completed === 'boolean') validatedData.onboarding_completed = updateData.onboarding_completed;
+    if (typeof updateData.onboarding_completed === 'boolean') {
+      validatedData.onboarding_completed = updateData.onboarding_completed;
+      if (updateData.onboarding_completed) {
+        validatedData.onboarding_completed_at = new Date().toISOString();
+      }
+    }
     if (typeof updateData.profile_completed === 'boolean') validatedData.profile_completed = updateData.profile_completed;
     
     // JSONB fields - merge with existing data
@@ -209,7 +214,7 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update(validatedData)
-        .eq('auth0_id', auth0UserId)
+        .eq('auth_uid', authUid)
         .select()
         .single();
       
@@ -229,9 +234,10 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
-          auth0_id: auth0UserId,
+          auth_uid: authUid,
           email: validatedData.email || decoded.email || '',
           avatar_url: decoded.picture || null,
+          email_verified_at: null,
           ...validatedData,
           created_at: new Date().toISOString(),
         }])
@@ -258,11 +264,12 @@ async function updateProfile(auth0UserId: string, decoded: any, updateData: Prof
 function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
   return {
     // Core identity
-    user_id: userData.auth0_id,
-    auth0_id: userData.auth0_id,
+    user_id: userData.auth_uid,
+    auth_uid: userData.auth_uid,
     email: decoded.email || userData.email || '',
     name: userData.name || decoded.name || '',
     picture: userData.avatar_url || decoded.picture || undefined,
+    email_verified_at: userData.email_verified_at || null,
     
     // Basic profile info
     age: userData.age || undefined,
@@ -309,6 +316,7 @@ function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
     updated_at: userData.updated_at || new Date().toISOString(),
     last_login_at: userData.last_login_at || undefined,
     onboarding_completed: userData.onboarding_completed || false,
+    onboarding_completed_at: userData.onboarding_completed_at || null,
     profile_completed: userData.profile_completed || false,
     
     // Analytics data

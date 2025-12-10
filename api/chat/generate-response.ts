@@ -8,7 +8,7 @@ import {
   normalizeAchievementTags, 
   createErrorResponse 
 } from '../../lib/api-handler';
-import { verifyToken } from '../../lib/auth';
+import { verifySupabaseToken } from '../../lib/auth-supabase';
 import { checkRateLimit } from '../../lib/rate-limit';
 
 // Toggle Supabase API logging
@@ -96,7 +96,7 @@ export default async function handler(req: any, res: any) {
 
   let decoded: any;
   try {
-    decoded = await verifyToken(token);
+    decoded = await verifySupabaseToken(token);
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -105,7 +105,7 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  const userId = decoded?.sub || 'unknown';
+  const userId = decoded?.id || 'unknown';
   const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
 
   // Validate required parameters

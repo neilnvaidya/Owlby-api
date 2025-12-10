@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { supabase } from '../../lib/supabase';
-import { verifyToken } from '../../lib/auth';
+import { verifySupabaseToken } from '../../lib/auth-supabase';
 
 export interface AchievementData {
   starRepository: {
@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeader.split(' ')[1];
     let user;
     try {
-      user = await verifyToken(token);
+    user = await verifySupabaseToken(token);
     } catch (error) {
       console.warn('Achievements sync: Token verification failed', { 
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -95,15 +95,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     console.log('Achievement sync request', {
-      userId: user.sub,
+      userId: user.id,
       method: req.method,
     });
 
     switch (req.method) {
       case 'GET':
-        return handleGetAchievements(req, res, user.sub);
+        return handleGetAchievements(req, res, user.id);
       case 'POST':
-        return handleSyncAchievements(req, res, user.sub, user);
+        return handleSyncAchievements(req, res, user.id, user);
       default:
         return res.status(405).json({ 
           success: false, 
@@ -131,7 +131,7 @@ async function handleGetAchievements(req: VercelRequest, res: VercelResponse, us
     const { data: userData, error } = await supabase
       .from('users')
       .select('achievements, stats, updated_at')
-      .eq('auth0_id', userId)
+        .eq('auth_uid', userId)
       .single();
 
     if (error) {
@@ -244,17 +244,17 @@ async function handleSyncAchievements(req: VercelRequest, res: VercelResponse, u
     const { data, error } = await supabase
       .from('users')
       .upsert({
-        auth0_id: userId,
+        auth_uid: userId,
         email: user.email || '', // Include email from JWT token
         achievements: achievementDbData,
         stats: statsDbData,
         last_login_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, { 
-        onConflict: 'auth0_id',
+        onConflict: 'auth_uid',
         ignoreDuplicates: false 
       })
-      .select('id, auth0_id, updated_at')
+      .select('id, auth_uid, updated_at')
       .single();
 
     if (error) {

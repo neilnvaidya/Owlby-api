@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { verifyToken } from '../../lib/auth';
+import { verifySupabaseToken } from '../../lib/auth-supabase';
 
 export interface FeedbackSubmission {
   feedback_type: 'general' | 'bug_report' | 'feature_request' | 'learning_experience';
@@ -110,8 +110,8 @@ export default async function handler(req: any, res: any) {
     if (authHeader && !is_anonymous) {
       try {
         const token = authHeader.replace('Bearer ', '');
-        const decoded = await verifyToken(token);
-        user_id = decoded.sub;
+        const decoded = await verifySupabaseToken(token);
+        user_id = decoded.id;
       } catch (error) {
         // If token is invalid, treat as anonymous feedback
         console.warn('Invalid token for feedback submission, treating as anonymous');

@@ -54,10 +54,11 @@ export interface LearningProgress {
 export interface UserProfile {
   // Core identity
   user_id: string;
-  auth0_id: string;
+  auth_uid?: string;
   email: string;
   name: string;
   picture?: string;
+  email_verified_at?: string | null;
   
   // Basic profile info
   age?: number;
@@ -76,6 +77,7 @@ export interface UserProfile {
   updated_at: string; // ISO timestamp
   last_login_at?: string; // ISO timestamp
   onboarding_completed: boolean;
+  onboarding_completed_at?: string | null;
   profile_completed: boolean;
   
   // Analytics data from Supabase
@@ -86,15 +88,16 @@ export interface UserProfile {
 }
 
 // Mock user data for development and testing
-export const createMockUserProfile = (auth0_id: string, email: string, name: string): UserProfile => {
+export const createMockUserProfile = (auth_uid: string, email: string, name: string): UserProfile => {
   const now = new Date().toISOString();
   
   return {
-    user_id: auth0_id,
-    auth0_id,
+    user_id: auth_uid,
+    auth_uid,
     email,
     name,
     picture: undefined,
+    email_verified_at: now,
     age: 10,
     grade_level: 4,
     interests: ['space', 'animals', 'math', 'science', 'art'],
@@ -206,6 +209,7 @@ export const createMockUserProfile = (auth0_id: string, email: string, name: str
     updated_at: now,
     last_login_at: now,
     onboarding_completed: true,
+    onboarding_completed_at: now,
     profile_completed: true,
     
     total_sessions: 45,

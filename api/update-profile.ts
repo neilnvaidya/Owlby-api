@@ -1,12 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { UserProfile } from '../lib/profile-types';
 import { supabase } from '../lib/supabase';
-import { verifyToken } from '../lib/auth';
+import { verifySupabaseToken } from '../lib/auth-supabase';
 
 /**
  * Onboarding-specific profile update API
- * Handles the transition from Auth0 authentication to Supabase user profiles
- * Specifically designed for the onboarding flow where we collect age/grade data
+ * Handles Supabase user profiles during onboarding where we collect age/grade data
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -35,11 +34,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Verify token and get user info
-    const decoded: any = await verifyToken(token);
-    const auth0UserId = decoded.sub;
+    const decoded: any = await verifySupabaseToken(token);
+    const authUid = decoded.id;
     
     // Ensure the userId matches the token (security check)
-    if (auth0UserId !== userId) {
+    if (authUid !== userId) {
       console.warn('⚠️ Security: User ID mismatch in onboarding request');
       return res.status(403).json({ 
         error: 'forbidden',
@@ -62,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // Use the existing profile update logic
-    const result = await updateOnboardingProfile(auth0UserId, decoded, onboardingData, res);
+    const result = await updateOnboardingProfile(authUid, decoded, onboardingData, res);
     return result;
     
   } catch (error) {
@@ -79,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  * Creates or updates user profile in Supabase with onboarding data
  */
 async function updateOnboardingProfile(
-  auth0UserId: string, 
+  authUid: string, 
   decoded: any, 
   onboardingData: any, 
   res: VercelResponse
@@ -89,7 +88,7 @@ async function updateOnboardingProfile(
     const { data: existingUser, error: checkError } = await supabase
       .from('users')
       .select('*')
-      .eq('auth0_id', auth0UserId)
+      .eq('auth_uid', authUid)
       .single();
     
     if (checkError && checkError.code !== 'PGRST116') {
@@ -106,12 +105,12 @@ async function updateOnboardingProfile(
 
     if (existingUser) {
       // Update existing user with onboarding data
-      console.info('📝 Updating existing user with onboarding data:', auth0UserId);
+      console.info('📝 Updating existing user with onboarding data:', authUid);
       
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
         .update(userData)
-        .eq('auth0_id', auth0UserId)
+        .eq('auth_uid', authUid)
         .select()
         .single();
       
@@ -121,7 +120,7 @@ async function updateOnboardingProfile(
       
       // Return updated profile
       const profile = {
-        user_id: auth0UserId,
+        user_id: authUid,
         name: updatedUser.name || '',
         email: decoded.email || '',
         picture: updatedUser.avatar_url || decoded.picture || undefined,
@@ -136,7 +135,7 @@ async function updateOnboardingProfile(
         message: 'Onboarding profile updated successfully',
         profile: profile,
       data: { 
-          userId: auth0UserId,
+          userId: authUid,
           name: userData.name,
           grade_level: userData.grade_level,
         updatedAt: new Date().toISOString()
@@ -145,12 +144,12 @@ async function updateOnboardingProfile(
     
     } else {
       // Create new user with onboarding data
-      console.info('👤 Creating new user with onboarding data:', auth0UserId);
+      console.info('👤 Creating new user with onboarding data:', authUid);
       
       const { data: newUser, error: insertError } = await supabase
         .from('users')
         .insert([{
-          auth0_id: auth0UserId,
+          auth_uid: authUid,
           email: decoded.email || '',
           avatar_url: decoded.picture || null,
           ...userData,
@@ -165,7 +164,7 @@ async function updateOnboardingProfile(
       
       // Return new profile
       const profile = {
-        user_id: auth0UserId,
+        user_id: authUid,
         name: newUser.name || '',
         email: decoded.email || '',
         picture: newUser.avatar_url || undefined,
@@ -180,7 +179,7 @@ async function updateOnboardingProfile(
         message: 'Onboarding profile created successfully',
         profile: profile,
         data: { 
-          userId: auth0UserId,
+          userId: authUid,
           name: userData.name,
           grade_level: userData.grade_level,
           createdAt: new Date().toISOString()

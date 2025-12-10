@@ -1,0 +1,83 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { verifySupabaseToken } from '../lib/auth-supabase';
+import { supabase } from '../lib/supabase';
+import { createVerificationToken } from '../lib/verification-token';
+
+const webBaseUrl = process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://owlby.com';
+
+async function findUser(authUid: string) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('auth_uid', authUid)
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function ensureNotRateLimited(userId: number) {
+  const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('email_verification_tokens')
+    .select('jti')
+    .eq('user_id', userId)
+    .gte('issued_at', twoMinutesAgo)
+    .limit(1);
+
+  if (error) {
+    throw error;
+  }
+
+  if (data && data.length > 0) {
+    throw new Error('Please wait a moment before requesting another verification email.');
+  }
+}
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ success: false, error: 'Missing token' });
+    }
+
+    const decoded: any = await verifySupabaseToken(token);
+    const email = decoded.email as string | undefined;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email is required on token' });
+    }
+
+    const user = await findUser(decoded.id);
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found for resend' });
+    }
+
+    if (user.email_verified_at) {
+      return res.status(200).json({ success: true, already_verified: true });
+    }
+
+    await ensureNotRateLimited(user.id);
+
+    const { token: verificationToken, expiresAt } = await createVerificationToken(user.id, email);
+    const verificationLink = `${webBaseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+
+    // NOTE: Email dispatch should be wired to your provider. For now we return the link for the caller to send.
+    return res.status(200).json({
+      success: true,
+      link: verificationLink,
+      expires_at: expiresAt,
+    });
+  } catch (error: any) {
+    console.error('resend-verification error:', error);
+    return res.status(400).json({ success: false, error: error?.message || 'Failed to resend verification' });
+  }
+}
+
