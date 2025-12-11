@@ -49,73 +49,14 @@ async function getProfile(authUid: string, decoded: any, res: VercelResponse) {
     // If user exists in database, return comprehensive profile
     if (userData) {
       console.log('User found in database, building comprehensive profile');
-      
-      const profile: UserProfile = {
-        // Core identity
-        user_id: authUid,
-        auth_uid: authUid,
-          auth_uid: authUid,
-        email: decoded.email || userData.email || '',
-        name: userData.name || decoded.name || '',
-        picture: userData.avatar_url || decoded.picture || undefined,
-        email_verified_at: userData.email_verified_at || null,
-        
-        // Basic profile info
-        age: userData.age || undefined,
-        grade_level: userData.grade_level || undefined,
-        interests: userData.interests || [],
-        parent_email: userData.parent_email || undefined,
-        
-        // Complex data from JSONB fields
-        achievements: userData.achievements || [],
-        stats: userData.stats || {
-          stars_earned: 0,
-          total_lessons: 0,
-          total_quizzes: 0,
-          streak_days: 0,
-          stories_created: 0,
-          chat_messages: 0,
-          topics_explored: 0,
-          quiz_correct_answers: 0,
-          quiz_total_answers: 0,
-          learning_minutes: 0,
-          favorite_subjects: [],
-          last_activity_at: new Date().toISOString()
-        },
-        preferences: userData.preferences || {
-          notifications_enabled: true,
-          sound_effects_enabled: true,
-          haptic_feedback_enabled: true,
-          dark_mode_enabled: false,
-          difficulty_level: 'intermediate',
-          learning_reminders: true,
-          safe_mode_enabled: true
-        },
-        learning_progress: userData.learning_progress || {
-          current_grade_level: userData.grade_level || 1,
-          completed_topics: [],
-          in_progress_topics: [],
-          mastered_skills: [],
-          areas_for_improvement: [],
-          learning_goals: []
-        },
-        
-        // Metadata
-        created_at: userData.created_at || new Date().toISOString(),
-        updated_at: userData.updated_at || new Date().toISOString(),
-        last_login_at: userData.last_login_at || undefined,
-        onboarding_completed: userData.onboarding_completed || false,
-        onboarding_completed_at: userData.onboarding_completed_at || null,
-        profile_completed: userData.profile_completed || false,
-        
-        // Analytics data
-        total_sessions: userData.total_sessions || 0,
-        total_chat_messages: userData.total_chat_messages || 0,
-        total_lessons_completed: userData.total_lessons_completed || 0,
-        total_stories_generated: userData.total_stories_generated || 0,
-      };
-      
-      console.log('Returning comprehensive profile with', profile.achievements.length, 'achievements');
+
+      const profile: UserProfile = buildProfileFromDbData(userData, decoded);
+      console.log('Returning comprehensive profile', {
+        achievementsCount: Array.isArray(profile.achievements) ? profile.achievements.length : 0,
+        grade_level: profile.grade_level,
+        onboarding_completed: profile.onboarding_completed,
+        profile_completed: profile.profile_completed,
+      });
       return res.status(200).json(profile);
     }
     
@@ -262,6 +203,39 @@ async function updateProfile(authUid: string, decoded: any, updateData: ProfileU
 
 // Helper function to build comprehensive profile from database data
 function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
+  const achievements = Array.isArray(userData.achievements) ? userData.achievements : [];
+  const stats = userData.stats ?? {
+    stars_earned: 0,
+    total_lessons: 0,
+    total_quizzes: 0,
+    streak_days: 0,
+    stories_created: 0,
+    chat_messages: 0,
+    topics_explored: 0,
+    quiz_correct_answers: 0,
+    quiz_total_answers: 0,
+    learning_minutes: 0,
+    favorite_subjects: [],
+    last_activity_at: new Date().toISOString()
+  };
+  const preferences = userData.preferences ?? {
+    notifications_enabled: true,
+    sound_effects_enabled: true,
+    haptic_feedback_enabled: true,
+    dark_mode_enabled: false,
+    difficulty_level: 'intermediate',
+    learning_reminders: true,
+    safe_mode_enabled: true
+  };
+  const learningProgress = userData.learning_progress ?? {
+    current_grade_level: userData.grade_level ?? 1,
+    completed_topics: [],
+    in_progress_topics: [],
+    mastered_skills: [],
+    areas_for_improvement: [],
+    learning_goals: []
+  };
+
   return {
     // Core identity
     user_id: userData.auth_uid,
@@ -272,57 +246,29 @@ function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
     email_verified_at: userData.email_verified_at || null,
     
     // Basic profile info
-    age: userData.age || undefined,
-    grade_level: userData.grade_level || undefined,
-    interests: userData.interests || [],
-    parent_email: userData.parent_email || undefined,
+    age: userData.age ?? undefined,
+    grade_level: userData.grade_level ?? undefined,
+    interests: Array.isArray(userData.interests) ? userData.interests : [],
+    parent_email: userData.parent_email ?? undefined,
     
     // Complex data from JSONB fields
-    achievements: userData.achievements || [],
-    stats: userData.stats || {
-      stars_earned: 0,
-      total_lessons: 0,
-      total_quizzes: 0,
-      streak_days: 0,
-      stories_created: 0,
-      chat_messages: 0,
-      topics_explored: 0,
-      quiz_correct_answers: 0,
-      quiz_total_answers: 0,
-      learning_minutes: 0,
-      favorite_subjects: [],
-      last_activity_at: new Date().toISOString()
-    },
-    preferences: userData.preferences || {
-      notifications_enabled: true,
-      sound_effects_enabled: true,
-      haptic_feedback_enabled: true,
-      dark_mode_enabled: false,
-      difficulty_level: 'intermediate',
-      learning_reminders: true,
-      safe_mode_enabled: true
-    },
-    learning_progress: userData.learning_progress || {
-      current_grade_level: userData.grade_level || 1,
-      completed_topics: [],
-      in_progress_topics: [],
-      mastered_skills: [],
-      areas_for_improvement: [],
-      learning_goals: []
-    },
+    achievements,
+    stats,
+    preferences,
+    learning_progress: learningProgress,
     
     // Metadata
-    created_at: userData.created_at || new Date().toISOString(),
-    updated_at: userData.updated_at || new Date().toISOString(),
-    last_login_at: userData.last_login_at || undefined,
-    onboarding_completed: userData.onboarding_completed || false,
-    onboarding_completed_at: userData.onboarding_completed_at || null,
-    profile_completed: userData.profile_completed || false,
+    created_at: userData.created_at ?? new Date().toISOString(),
+    updated_at: userData.updated_at ?? new Date().toISOString(),
+    last_login_at: userData.last_login_at ?? undefined,
+    onboarding_completed: userData.onboarding_completed ?? false,
+    onboarding_completed_at: userData.onboarding_completed_at ?? null,
+    profile_completed: userData.profile_completed ?? false,
     
     // Analytics data
-    total_sessions: userData.total_sessions || 0,
-    total_chat_messages: userData.total_chat_messages || 0,
-    total_lessons_completed: userData.total_lessons_completed || 0,
-    total_stories_generated: userData.total_stories_generated || 0,
+    total_sessions: userData.total_sessions ?? 0,
+    total_chat_messages: userData.total_chat_messages ?? 0,
+    total_lessons_completed: userData.total_lessons_completed ?? 0,
+    total_stories_generated: userData.total_stories_generated ?? 0,
   };
 } 

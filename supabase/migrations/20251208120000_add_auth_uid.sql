@@ -10,3 +10,4 @@ where auth_uid is null and auth0_id is not null;
 
 create index if not exists users_auth_uid_idx on public.users(auth_uid);
 
+
