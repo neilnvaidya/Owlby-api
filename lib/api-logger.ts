@@ -22,6 +22,7 @@ interface APILogData {
   geminiUsageMetadata?: {
     promptTokenCount: number;
     candidatesTokenCount: number;
+    thinkingTokenCount?: number; // Only present for models with thinking (e.g., Gemini 2.5 Pro)
     totalTokenCount: number;
   };
 }
@@ -37,6 +38,7 @@ interface LogEntry {
   model: string;
   input_tokens: number;
   output_tokens: number;
+  thinking_tokens: number;
   total_tokens: number;
   input_length: number;
   output_length: number;
@@ -45,8 +47,8 @@ interface LogEntry {
   error_type?: string;
   input_cost: number;
   output_cost: number;
+  thinking_cost: number;
   total_cost: number;
-  exact_cost: number;
 }
 
 class APILoggingService {
@@ -60,14 +62,16 @@ class APILoggingService {
     totalCost: 0,
     totalInputTokens: 0,
     totalOutputTokens: 0,
+    totalThinkingTokens: 0,
     totalCalls: 0,
     startTime: new Date()
   };
 
   // Gemini pricing per 1M tokens (update as needed)
+  // Note: Thinking tokens are charged at the same rate as input tokens
   private readonly PRICING = {
-    'gemini-2.5-flash': { input: 0.30, output: 2.50 },
-    'gemini-2.5-pro': { input: 1.25, output: 2.50 },
+    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 0.30 }, // Flash has no thinking, but set for consistency
+    'gemini-2.5-pro': { input: 1.25, output: 2.50, thinking: 1.25 }, // Thinking charged at input rate
   };
   
   constructor() {
@@ -80,12 +84,35 @@ class APILoggingService {
 
   async logAPICall(data: APILogData): Promise<void> {
     try {
-      const modelName = 'gemini-2.5-flash';
+      const modelName = data.model as keyof typeof this.PRICING;
+      
+      // Extract token counts from Gemini API response
+      // promptTokenCount = input tokens (prompt + system instruction)
+      // candidatesTokenCount = output tokens (response only, excludes thinking)
+      // thinkingTokenCount = thinking tokens (only for models with thinking, like Gemini 2.5 Pro)
+      // totalTokenCount = sum of all tokens
       const inputTokens = data.geminiUsageMetadata?.promptTokenCount || 0;
-      const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0;
-      const totalTokens = data.geminiUsageMetadata?.totalTokenCount || 0;
-      const { inputCost, outputCost, totalCost } = this.calculateCostBreakdown(inputTokens, outputTokens, modelName);
-      const exactCost = totalCost;
+      const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0; // Response only, excludes thinking
+      const thinkingTokens = data.geminiUsageMetadata?.thinkingTokenCount || 0; // Only for models with thinking
+      
+      // Calculate total tokens: input + output + thinking
+      // Note: Gemini's totalTokenCount should equal this, but we calculate it ourselves for verification
+      const calculatedTotalTokens = inputTokens + outputTokens + thinkingTokens;
+      const reportedTotalTokens = data.geminiUsageMetadata?.totalTokenCount || calculatedTotalTokens;
+      
+      // Use calculated total (input + output + thinking) for consistency
+      // Verify against reported total for debugging
+      const totalTokens = calculatedTotalTokens;
+      if (calculatedTotalTokens !== reportedTotalTokens && reportedTotalTokens > 0) {
+        console.warn(`[API LOGGER] Token count mismatch: calculated=${calculatedTotalTokens}, reported=${reportedTotalTokens}`);
+      }
+      
+      const { inputCost, outputCost, thinkingCost, totalCost } = this.calculateCostBreakdown(
+        inputTokens, 
+        outputTokens, 
+        thinkingTokens,
+        modelName
+      );
       
       // DETAILED TOKEN USAGE LOG - Always visible in Vercel logs 
       console.info(`💰 [${data.route.toUpperCase()}] TOKEN USAGE & COST BREAKDOWN:`, {
@@ -102,8 +129,11 @@ class APILoggingService {
         // TOKEN BREAKDOWN
         tokens: {
           input_tokens: inputTokens,
-          output_tokens: outputTokens, 
+          output_tokens: outputTokens, // Response only, excludes thinking
+          thinking_tokens: thinkingTokens, // Only for models with thinking
           total_tokens: totalTokens,
+          calculated_total: calculatedTotalTokens,
+          reported_total: reportedTotalTokens,
           token_ratio: outputTokens > 0 ? (outputTokens / inputTokens).toFixed(2) : 'N/A'
         },
         
@@ -119,8 +149,9 @@ class APILoggingService {
         cost_breakdown: {
           input_cost_usd: inputCost.toFixed(6),
           output_cost_usd: outputCost.toFixed(6),
+          thinking_cost_usd: thinkingCost.toFixed(6),
           total_cost_usd: totalCost.toFixed(6),
-          cost_per_1k_tokens: totalTokens > 0 ? ((exactCost / totalTokens) * 1000).toFixed(6) : 'N/A'
+          cost_per_1k_tokens: totalTokens > 0 ? ((totalCost / totalTokens) * 1000).toFixed(6) : 'N/A'
         },
         
         // PRICING RATES USED
@@ -136,16 +167,18 @@ class APILoggingService {
       });
       
       // Update session running totals
-      this.sessionStats.totalCost += exactCost;
+      this.sessionStats.totalCost += totalCost;
       this.sessionStats.totalInputTokens += inputTokens;
       this.sessionStats.totalOutputTokens += outputTokens;
+      this.sessionStats.totalThinkingTokens += thinkingTokens;
       this.sessionStats.totalCalls += 1;
       
       // Additional high-level summary for easy scanning
-      const costInCents = exactCost * 100;
+      const costInCents = totalCost * 100;
       const sessionCostInCents = this.sessionStats.totalCost * 100;
-      console.info(`💸 [${data.route.toUpperCase()}] COST SUMMARY: $${exactCost.toFixed(6)} (${costInCents.toFixed(3)}¢) | ${inputTokens}→${outputTokens} tokens | ${data.responseTimeMs}ms`);
-      console.info(`📊 [SESSION TOTALS] Calls: ${this.sessionStats.totalCalls} | Total Cost: $${this.sessionStats.totalCost.toFixed(6)} (${sessionCostInCents.toFixed(3)}¢) | Tokens: ${this.sessionStats.totalInputTokens}→${this.sessionStats.totalOutputTokens}`);
+      const thinkingDisplay = thinkingTokens > 0 ? `+${thinkingTokens} thinking` : '';
+      console.info(`💸 [${data.route.toUpperCase()}] COST SUMMARY: $${totalCost.toFixed(6)} (${costInCents.toFixed(3)}¢) | ${inputTokens}→${outputTokens}${thinkingDisplay} tokens | ${data.responseTimeMs}ms`);
+      console.info(`📊 [SESSION TOTALS] Calls: ${this.sessionStats.totalCalls} | Total Cost: $${this.sessionStats.totalCost.toFixed(6)} (${sessionCostInCents.toFixed(3)}¢) | Tokens: ${this.sessionStats.totalInputTokens}→${this.sessionStats.totalOutputTokens}+${this.sessionStats.totalThinkingTokens} thinking`);
       
       const entry: LogEntry = {
         timestamp: new Date().toISOString(),
@@ -156,8 +189,9 @@ class APILoggingService {
         grade_level: data.gradeLevel,
         model: data.model,
         input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        total_tokens: totalTokens,
+        output_tokens: outputTokens, // Response only, excludes thinking
+        thinking_tokens: thinkingTokens, // Only for models with thinking
+        total_tokens: totalTokens, // input + output + thinking
         input_length: data.inputText.length,
         output_length: data.outputText?.length || 0,
         response_time_ms: data.responseTimeMs,
@@ -165,8 +199,8 @@ class APILoggingService {
         error_type: data.error,
         input_cost: inputCost,
         output_cost: outputCost,
-        total_cost: totalCost,
-        exact_cost: exactCost
+        thinking_cost: thinkingCost, // Cost for thinking tokens
+        total_cost: totalCost // input_cost + output_cost + thinking_cost
       };
 
       this.buffer.push(entry);
@@ -180,12 +214,19 @@ class APILoggingService {
     }
   }
 
-  private calculateCostBreakdown(inputTokens: number, outputTokens: number, model: keyof typeof this.PRICING) {
-    const rates = this.PRICING[model];
+  private calculateCostBreakdown(
+    inputTokens: number, 
+    outputTokens: number, 
+    thinkingTokens: number,
+    model: keyof typeof this.PRICING
+  ) {
+    const rates = this.PRICING[model] || this.PRICING['gemini-2.5-flash']; // Fallback to Flash pricing
     const inputCost = (inputTokens / 1_000_000) * rates.input;
     const outputCost = (outputTokens / 1_000_000) * rates.output;
-    const totalCost = inputCost + outputCost;
-    return { inputCost, outputCost, totalCost };
+    // Thinking tokens are charged at the same rate as input tokens
+    const thinkingCost = (thinkingTokens / 1_000_000) * rates.thinking;
+    const totalCost = inputCost + outputCost + thinkingCost;
+    return { inputCost, outputCost, thinkingCost, totalCost };
   }
 
   private async flushToSupabase(): Promise<void> {
