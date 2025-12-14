@@ -11,8 +11,8 @@ import {
 import { verifySupabaseToken } from '../../lib/auth-supabase';
 import { checkRateLimit } from '../../lib/rate-limit';
 
-// Toggle Supabase API logging
-const ENABLE_API_LOGGING = false;
+// Toggle Supabase API logging - Always enabled for cost tracking
+const ENABLE_API_LOGGING = true;
 
 /**
  * Process the JSON response from Owlby chat API
@@ -165,6 +165,11 @@ export default async function handler(req: any, res: any) {
   // Track model usage for logging (declared outside try/catch for scope)
   let modelUsed = 'unknown';
   let fallbackUsed = false;
+  
+  // Extract last user message for logging (declared outside try/catch for scope)
+  const lastUserMessage = messages && messages.length > 0
+    ? messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || ''
+    : '';
 
   try {
     const previewMsg = messages && messages.length > 0 
@@ -181,7 +186,6 @@ export default async function handler(req: any, res: any) {
     const systemInstructions = getChatInstructions(gradeLevel, recentContext);
     
     // Create contents for AI request
-    const lastUserMessage = messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || '';
     const contents = [
       {
         role: 'user',
@@ -224,35 +228,33 @@ export default async function handler(req: any, res: any) {
         requiredCategoryTags: processedResponse.requiredCategoryTags,
       }, null, 2));
 
-      if (ENABLE_API_LOGGING) {
-        logChatCall({
-          userId,
-          chatId,
-          gradeLevel,
-          message: '[multi-turn]',
-          responseText,
-          responseTimeMs: Date.now() - startTime,
-          success: true,
-          usageMetadata,
-          model: modelUsed,
-        });
-        await flushApiLogger();
-      }
+      // Always log chat API usage for cost tracking
+      logChatCall({
+        userId,
+        chatId,
+        gradeLevel,
+        message: lastUserMessage, // Use actual user message instead of placeholder
+        responseText,
+        responseTimeMs: Date.now() - startTime,
+        success: true,
+        usageMetadata,
+        model: modelUsed,
+      });
+      await flushApiLogger();
 
     } catch (aiError: any) {
-      if (ENABLE_API_LOGGING) {
-        logChatCall({
-          userId,
-          chatId,
-          gradeLevel,
-          message: '[multi-turn]',
-          responseTimeMs: Date.now() - startTime,
-          success: false,
-          error: aiError.message || 'UnknownError',
-          model: modelUsed,
-        });
-        await flushApiLogger();
-      }
+      // Always log chat API usage for cost tracking (even on errors)
+      logChatCall({
+        userId,
+        chatId,
+        gradeLevel,
+        message: lastUserMessage, // Use actual user message instead of placeholder
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: aiError.message || 'UnknownError',
+        model: modelUsed,
+      });
+      await flushApiLogger();
 
       // Handle specific AI errors with fallback responses
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
@@ -284,26 +286,24 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    if (ENABLE_API_LOGGING) {
-      await flushApiLogger();
-    }
+    // Final flush before returning (logging already done above)
+    await flushApiLogger();
     
     return res.status(200).json(processedResponse);
 
   } catch (error: any) {
-    if (ENABLE_API_LOGGING) {
-      logChatCall({
-        userId,
-        chatId,
-        gradeLevel,
-        message: '[multi-turn]',
-        responseTimeMs: Date.now() - startTime,
-        success: false,
-        error: error.message || 'UnknownApiError',
-        model: modelUsed,
-      });
-      await flushApiLogger();
-    }
+    // Always log chat API usage for cost tracking (even on errors)
+    logChatCall({
+      userId,
+      chatId,
+      gradeLevel,
+      message: lastUserMessage || '[unknown]', // Use actual user message if available
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: error.message || 'UnknownApiError',
+      model: modelUsed || 'unknown',
+    });
+    await flushApiLogger();
 
     // Return graceful error response matching ChatResponse structure
     const errorMessage = error.message || 'Unknown error';
