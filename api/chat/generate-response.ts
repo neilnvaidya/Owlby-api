@@ -247,24 +247,28 @@ export default async function handler(req: any, res: any) {
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
         processedResponse = {
           response_text: {
-            main: "Hoot hoot! I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?"
+            main: "I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?"
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],
-            learn_more: { prompt: "", tags: [] },
-            story_button: { title: "", story_prompt: "" }
-          }
+            learn_more: { topic: "" },
+            story_button: { prompt: "" }
+          },
+          requiredCategoryTags: [],
+          optionalTags: []
         };
       } else {
         processedResponse = {
           response_text: {
-            main: "Hoo-hoo! I'm having trouble processing your request right now. Can you try asking something else?"
+            main: "I'm having trouble processing your request right now. Can you try asking something else?"
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],
-            learn_more: { prompt: "", tags: [] },
-            story_button: { title: "", story_prompt: "" }
-          }
+            learn_more: { topic: "" },
+            story_button: { prompt: "" }
+          },
+          requiredCategoryTags: [],
+          optionalTags: []
         };
       }
     }

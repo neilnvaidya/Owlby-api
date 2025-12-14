@@ -49,7 +49,7 @@ async function getProfile(authUid: string, decoded: any, res: VercelResponse) {
     // If user exists in database, return comprehensive profile
     if (userData) {
       console.log('User found in database, building comprehensive profile');
-
+      
       const profile: UserProfile = buildProfileFromDbData(userData, decoded);
       console.log('Returning comprehensive profile', {
         achievementsCount: Array.isArray(profile.achievements) ? profile.achievements.length : 0,
@@ -205,35 +205,35 @@ async function updateProfile(authUid: string, decoded: any, updateData: ProfileU
 function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
   const achievements = Array.isArray(userData.achievements) ? userData.achievements : [];
   const stats = userData.stats ?? {
-    stars_earned: 0,
-    total_lessons: 0,
-    total_quizzes: 0,
-    streak_days: 0,
-    stories_created: 0,
-    chat_messages: 0,
-    topics_explored: 0,
-    quiz_correct_answers: 0,
-    quiz_total_answers: 0,
-    learning_minutes: 0,
-    favorite_subjects: [],
-    last_activity_at: new Date().toISOString()
+      stars_earned: 0,
+      total_lessons: 0,
+      total_quizzes: 0,
+      streak_days: 0,
+      stories_created: 0,
+      chat_messages: 0,
+      topics_explored: 0,
+      quiz_correct_answers: 0,
+      quiz_total_answers: 0,
+      learning_minutes: 0,
+      favorite_subjects: [],
+      last_activity_at: new Date().toISOString()
   };
   const preferences = userData.preferences ?? {
-    notifications_enabled: true,
-    sound_effects_enabled: true,
-    haptic_feedback_enabled: true,
-    dark_mode_enabled: false,
-    difficulty_level: 'intermediate',
-    learning_reminders: true,
-    safe_mode_enabled: true
+      notifications_enabled: true,
+      sound_effects_enabled: true,
+      haptic_feedback_enabled: true,
+      dark_mode_enabled: false,
+      difficulty_level: 'intermediate',
+      learning_reminders: true,
+      safe_mode_enabled: true
   };
   const learningProgress = userData.learning_progress ?? {
     current_grade_level: userData.grade_level ?? 1,
-    completed_topics: [],
-    in_progress_topics: [],
-    mastered_skills: [],
-    areas_for_improvement: [],
-    learning_goals: []
+      completed_topics: [],
+      in_progress_topics: [],
+      mastered_skills: [],
+      areas_for_improvement: [],
+      learning_goals: []
   };
 
   return {

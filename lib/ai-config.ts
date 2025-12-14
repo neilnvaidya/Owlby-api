@@ -94,7 +94,8 @@ export function buildProConfig(
   responseSchema: any,
   systemInstruction: string,
   maxOutputTokens: number = 4096,
-  thinkingBudget: number = 1500
+  thinkingBudget: number = 1500,
+  temperature: number = 0.9
 ) {
   return {
     safetySettings: SAFETY_SETTINGS,
@@ -102,7 +103,7 @@ export function buildProConfig(
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
     maxOutputTokens,
-    temperature: 0.9,
+    temperature,
     thinkingConfig: {
       thinkingBudget,
     },
@@ -116,7 +117,8 @@ export function buildProConfig(
 export function buildFlashConfig(
   responseSchema: any,
   systemInstruction: string,
-  maxOutputTokens: number = 4096
+  maxOutputTokens: number = 4096,
+  temperature: number = 0.9
 ) {
   return {
     safetySettings: SAFETY_SETTINGS,
@@ -124,10 +126,21 @@ export function buildFlashConfig(
     responseSchema,
     systemInstruction: [{ text: systemInstruction }],
     maxOutputTokens,
-    temperature: 0.9,
+    temperature,
     // Note: Flash does not support thinkingConfig
   };
 }
+
+/**
+ * Route-specific temperature settings
+ * Chat uses lower temperature (0.75) for more consistent factual responses
+ * Lesson and Story use default (0.9) for more creative/engaging content
+ */
+export const ROUTE_TEMPERATURES: Record<string, number> = {
+  chat: 0.75,
+  lesson: 0.9,
+  story: 0.9,
+};
 
 /**
  * Build AI configuration based on model name
@@ -137,16 +150,18 @@ export function buildAIConfig(
   modelName: string,
   responseSchema: any,
   systemInstruction: string,
-  maxOutputTokens: number = 4096
+  maxOutputTokens: number = 4096,
+  temperature?: number
 ) {
+  const finalTemperature = temperature ?? 0.9;
   if (modelName === MODELS.PRO) {
-    return buildProConfig(responseSchema, systemInstruction, maxOutputTokens);
+    return buildProConfig(responseSchema, systemInstruction, maxOutputTokens, 1500, finalTemperature);
   } else if (modelName === MODELS.FLASH) {
-    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens);
+    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else {
     // Default to Flash config for unknown models
     console.warn(`Unknown model ${modelName}, defaulting to Flash config`);
-    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens);
+    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   }
 }
 

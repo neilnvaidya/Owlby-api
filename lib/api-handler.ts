@@ -1,4 +1,4 @@
-import { CORS_HEADERS, ai, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, MODELS } from './ai-config';
+import { CORS_HEADERS, ai, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, MODELS, ROUTE_TEMPERATURES } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
 
 /**
@@ -120,10 +120,13 @@ export async function processAIRequest(
   let lastError: any = null;
   let fallbackUsed = false;
 
+  // Get route-specific temperature (defaults to 0.9 if not specified)
+  const temperature = ROUTE_TEMPERATURES[endpoint] ?? 0.9;
+
   // Attempt primary model (with one retry)
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens);
+      const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
       const result = await attemptAIRequest(primary, config, contents, endpoint, inputText);
       
       return {
@@ -148,7 +151,7 @@ export async function processAIRequest(
 
   // Fallback to secondary model
   try {
-    const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens);
+    const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens, temperature);
     const result = await attemptAIRequest(fallback, config, contents, endpoint, inputText);
     
     console.warn(`⚠️ [${endpoint}] Fallback to ${fallback} succeeded`);

@@ -20,10 +20,11 @@ const ACHIEVEMENT_TAGS_SCHEMA = {
     type: Type.ARRAY, 
     items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } 
   },
-  // Current: optional tags for analytics
+  // Current: required detailed context tags (passed to lesson/story routes)
   optionalTags: { 
     type: Type.ARRAY, 
-    items: { type: Type.STRING } 
+    items: { type: Type.STRING },
+    description: "Required detailed context tags that carry specific information (people, places, concepts) to lesson/story routes"
   }
 };
 
@@ -32,7 +33,7 @@ const ACHIEVEMENT_TAGS_SCHEMA = {
  */
 export const chatResponseSchema = {
   type: Type.OBJECT,
-  required: ["response_text", "interactive_elements"],
+  required: ["response_text", "interactive_elements", "optionalTags"],
   properties: {
     ...ACHIEVEMENT_TAGS_SCHEMA,
     response_text: {
@@ -60,15 +61,13 @@ export const chatResponseSchema = {
         story_button: {
           type: Type.OBJECT,
           properties: {
-            title: { type: Type.STRING },
-            story_prompt: { type: Type.STRING },
+            prompt: { type: Type.STRING },
           },
         },
         learn_more: {
           type: Type.OBJECT,
           properties: {
-            prompt: { type: Type.STRING },
-            tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+            topic: { type: Type.STRING },
           },
         },
       },

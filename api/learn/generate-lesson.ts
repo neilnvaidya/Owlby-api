@@ -75,7 +75,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
-  const { topic, gradeLevel = 3 } = req.body;
+  const { topic, gradeLevel = 3, tags } = req.body;
+  const contextTags = Array.isArray(tags) ? tags : [];
   
   // Validate required parameters
   if (!topic) {
@@ -111,7 +112,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     // Build system instructions
-    const systemInstructions = getLessonInstructions(topic, gradeLevel);
+    const systemInstructions = getLessonInstructions(topic, gradeLevel, contextTags);
     
     // Create contents for AI request
     const contents = [
