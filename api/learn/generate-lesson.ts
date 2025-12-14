@@ -78,6 +78,17 @@ export default async function handler(req: any, res: any) {
   const { topic, gradeLevel = 3, tags } = req.body;
   const contextTags = Array.isArray(tags) ? tags : [];
   
+  console.log('[LESSON API] Request received:', {
+    userId,
+    topic,
+    gradeLevel,
+    tags,
+    tagsType: typeof tags,
+    tagsIsArray: Array.isArray(tags),
+    contextTagsCount: contextTags.length,
+    contextTags,
+  });
+  
   // Validate required parameters
   if (!topic) {
     logLessonCall({

@@ -212,6 +212,17 @@ export default async function handler(req: any, res: any) {
       
       // Normalize achievement tags
       normalizeAchievementTags(processedResponse);
+      
+      // Extensive logging for debugging interactive elements
+      console.log('[CHAT API] Full response structure:', JSON.stringify({
+        hasResponseText: !!processedResponse.response_text,
+        hasInteractiveElements: !!processedResponse.interactive_elements,
+        interactiveElements: processedResponse.interactive_elements,
+        learnMore: processedResponse.interactive_elements?.learn_more,
+        storyButton: processedResponse.interactive_elements?.story_button,
+        optionalTags: processedResponse.optionalTags,
+        requiredCategoryTags: processedResponse.requiredCategoryTags,
+      }, null, 2));
 
       if (ENABLE_API_LOGGING) {
         logChatCall({

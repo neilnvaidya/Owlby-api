@@ -74,6 +74,17 @@ export default async function handler(req: any, res: any) {
   const { prompt, gradeLevel = 3, tags } = req.body;
   const contextTags = Array.isArray(tags) ? tags : [];
   
+  console.log('[STORY API] Request received:', {
+    userId,
+    prompt,
+    gradeLevel,
+    tags,
+    tagsType: typeof tags,
+    tagsIsArray: Array.isArray(tags),
+    contextTagsCount: contextTags.length,
+    contextTags,
+  });
+  
   // Validate required parameters
   if (!prompt) {
     logStoryCall({
