@@ -3,7 +3,7 @@
 # Test script to verify health endpoint is accessible and logging
 # Usage: ./test-health.sh [api-url]
 
-API_URL="${1:-https://api.owlby.com}"
+API_URL="${1:-https://api-dev.owlby.com}"
 
 echo "Testing health endpoint at: ${API_URL}/health"
 echo "----------------------------------------"
