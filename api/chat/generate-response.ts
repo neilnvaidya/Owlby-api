@@ -85,13 +85,16 @@ export default async function handler(req: any, res: any) {
   const userAgent = req.headers?.['user-agent'] || 'unknown';
   const ip = req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || 'unknown';
   
-  console.info(`[CHAT API] ${timestamp} - ${method} ${url}`, {
+  // Log incoming request to Vercel logs - using console.log for better visibility
+  console.log(`[CHAT API] ${timestamp} - ${method} ${url}`);
+  console.log(`[CHAT API] IP: ${ip} | User-Agent: ${userAgent}`);
+  console.log('[CHAT API] Request details:', JSON.stringify({
     method,
     url,
     userAgent,
     ip,
     timestamp,
-  });
+  }, null, 2));
 
   // Handle CORS and validate request method
   if (!handleCORS(req, res)) return;
