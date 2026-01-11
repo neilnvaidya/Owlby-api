@@ -22,3 +22,9 @@ COMMENT ON COLUMN api_usage_logs.total_tokens IS 'Total tokens = input_tokens + 
 COMMENT ON COLUMN api_usage_logs.thinking_cost IS 'Cost for thinking tokens (same rate as input tokens)';
 COMMENT ON COLUMN api_usage_logs.total_cost IS 'Total cost = input_cost + output_cost + thinking_cost';
 
+
+
+
+
+
+

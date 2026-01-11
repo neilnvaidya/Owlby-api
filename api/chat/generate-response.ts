@@ -77,6 +77,22 @@ function processResponse(responseText: string, query: string, gradeLevel: number
 }
 
 export default async function handler(req: any, res: any) {
+  // Log incoming request to Vercel logs
+  const requestStartTime = Date.now();
+  const timestamp = new Date().toISOString();
+  const method = req.method || 'POST';
+  const url = req.url || '/api/chat/generate-response';
+  const userAgent = req.headers?.['user-agent'] || 'unknown';
+  const ip = req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || 'unknown';
+  
+  console.info(`[CHAT API] ${timestamp} - ${method} ${url}`, {
+    method,
+    url,
+    userAgent,
+    ip,
+    timestamp,
+  });
+
   // Handle CORS and validate request method
   if (!handleCORS(req, res)) return;
 
