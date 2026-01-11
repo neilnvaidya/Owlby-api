@@ -96,7 +96,7 @@ async function attemptAIRequest(
 
 /**
  * Standard AI request processing with retry and fallback logic
- * Attempts primary model twice, then falls back to secondary model on specific errors
+ * Attempts primary model twice, then falls back through: flash -> 2.5-pro
  */
 export async function processAIRequest(
   responseSchema: any,
@@ -116,7 +116,7 @@ export async function processAIRequest(
     throw new Error(`No model configuration found for endpoint: ${endpoint}`);
   }
 
-  const { primary, fallback } = routeConfig;
+  const { primary, fallback1, fallback2 } = routeConfig;
   let lastError: any = null;
   let fallbackUsed = false;
 
@@ -149,19 +149,35 @@ export async function processAIRequest(
     }
   }
 
-  // Fallback to secondary model
+  // Fallback to first fallback model (gemini-3-flash)
   try {
-    const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(fallback, config, contents, endpoint, inputText);
+    const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
+    const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText);
     
-    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback} succeeded`);
+    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
     return {
       ...result,
-      modelUsed: fallback,
+      modelUsed: fallback1,
       fallbackUsed: true,
     };
   } catch (error: any) {
-    console.error(`❌ [${endpoint}] Both models failed. Last error:`, error.message);
+    lastError = error;
+    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} failed, trying ${fallback2}`);
+  }
+
+  // Fallback to second fallback model (gemini-2.5-pro)
+  try {
+    const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
+    const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText);
+    
+    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
+    return {
+      ...result,
+      modelUsed: fallback2,
+      fallbackUsed: true,
+    };
+  } catch (error: any) {
+    console.error(`❌ [${endpoint}] All models failed. Last error:`, error.message);
     
     // Handle specific error types for final error reporting
     if (error.message && error.message.includes('User location is not supported')) {

@@ -70,8 +70,10 @@ class APILoggingService {
   // Gemini pricing per 1M tokens (update as needed)
   // Note: Thinking tokens are charged at the same rate as input tokens
   private readonly PRICING = {
-    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 0.30 }, // Flash has no thinking, but set for consistency
-    'gemini-2.5-pro': { input: 1.25, output: 2.50, thinking: 1.25 }, // Thinking charged at input rate
+    'gemini-3-flash-preview': { input: 0.50, output: 3.00, thinking: 3.00}, // Preview model, similar to Flash pricing
+    'gemini-3-flash': { input: 0.5, output: 3.00, thinking: 3.00 }, // Flash has no thinking, but set for consistency
+    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 2.50}, // Flash has no thinking, but set for consistency
+    'gemini-2.5-pro': { input: 1.25, output: 10.00, thinking: 10.0 }, // Thinking charged at input rate
   };
   
   constructor() {
@@ -220,7 +222,7 @@ class APILoggingService {
     thinkingTokens: number,
     model: keyof typeof this.PRICING
   ) {
-    const rates = this.PRICING[model] || this.PRICING['gemini-2.5-flash']; // Fallback to Flash pricing
+    const rates = this.PRICING[model] || this.PRICING['gemini-3-flash']; // Fallback to Flash pricing
     const inputCost = (inputTokens / 1_000_000) * rates.input;
     const outputCost = (outputTokens / 1_000_000) * rates.output;
     // Thinking tokens are charged at the same rate as input tokens
