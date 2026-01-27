@@ -1,13 +1,14 @@
 import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 import { chatResponseSchema } from '../../lib/ai-schemas';
-import { getChatInstructions } from '../../lib/ai-instructions';
+import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions';
 import { 
   handleCORS, 
   processAIRequest, 
   normalizeAchievementTags, 
   createErrorResponse 
 } from '../../lib/api-handler';
+import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config';
 import { verifySupabaseToken } from '../../lib/auth-supabase';
 import { checkRateLimit } from '../../lib/rate-limit';
 
@@ -240,7 +241,10 @@ export default async function handler(req: any, res: any) {
       .map((m: any, idx: number) => `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`)
       .join('\n');
 
-    const systemInstructions = getChatInstructions(gradeLevel, recentContext);
+    const primaryModel = ROUTE_MODEL_CONFIG.chat?.primary;
+    const systemInstructions = primaryModel === MODELS.FLASH_OLD
+      ? getChatInstructionsForFlash25(gradeLevel, recentContext)
+      : getChatInstructions(gradeLevel, recentContext);
     mark('instructionsMs', instructionsStart);
     
     // Create contents for AI request
@@ -270,6 +274,14 @@ export default async function handler(req: any, res: any) {
       fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
       timing.aiMs = aiDurationMs;
+      const promptTokens = usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+      const thinkingTokens = usageMetadata?.thinkingTokenCount ?? usageMetadata?.thoughtsTokenCount ?? 0;
+      const totalTokens = usageMetadata?.totalTokenCount ?? (promptTokens + outputTokens + thinkingTokens);
+      timing.promptTokens = promptTokens;
+      timing.outputTokens = outputTokens;
+      timing.thinkingTokens = thinkingTokens;
+      timing.totalTokens = totalTokens;
       
       // Process complete response
       const processStart = Date.now();

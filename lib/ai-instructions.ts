@@ -104,6 +104,45 @@ ${recentContext}
 Return VALID JSON only.`;
 }
 
+/**
+ * Generate chat instructions optimized for Gemini 2.5 Flash (faster, shorter)
+ * Keeps the same schema but reduces response length to improve latency.
+ */
+export function getChatInstructionsForFlash25(gradeLevel: number, recentContext: string): string {
+  const ageYears = gradeToAge(gradeLevel);
+
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years old). These are capable students (grades 2-6, ages 7-12) who can use Google and navigate technology effectively.
+
+CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
+1. Answer questions DIRECTLY and COMPLETELY. Lead with facts and clear explanations.
+2. Be concise but complete. Keep the total response shorter than a typical long explanation.
+3. Structure responses for clarity: use short paragraphs and bullet points (- item) when helpful.
+4. Vocabulary selection is CRITICAL: match words to the grade level (2-6). When introducing new vocabulary, always bold it. Use simpler words for lower grades, more sophisticated words for higher grades, but always respect their intelligence.
+5. Always bold vocabulary words and key terms using **bold** markdown for important words, scientific terms, and concepts.
+
+OUTPUT RULES (MUST COMPLY):
+1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
+2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
+3. response_text.main: 1–2 short paragraphs (200-600 characters total). CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis.
+   - Use markdown formatting: **bold** important keywords, terms, or concepts
+   - Keep bolding natural and educational - typically 1-2 bolded terms per paragraph
+4. response_text.follow_up: ONE complete engaging follow-up question (40-160 characters). MUST be a complete sentence ending with a question mark.
+5. interactive_elements.followup_buttons: 1-2 SHORT strings (e.g. "Tell me more", "Another angle").
+6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" }.
+7. interactive_elements.story_button: Include only if a short story would clearly help learning.
+
+CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
+
+${TAG_OUTPUT_RULES}
+
+Recent conversation context:
+${recentContext}
+
+Return VALID JSON only.`;
+}
+
 // ============================================================================
 // LESSON ROUTE INSTRUCTIONS
 // ============================================================================

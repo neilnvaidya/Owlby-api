@@ -10,6 +10,7 @@ const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000)
 const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 70000);
 const DEFAULT_AI_PRIMARY_ATTEMPTS = Number(process.env.AI_PRIMARY_ATTEMPTS ?? 1);
 const DEFAULT_AI_RETRY_BACKOFF_MS = Number(process.env.AI_RETRY_BACKOFF_MS ?? 250);
+const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -90,6 +91,7 @@ async function attemptAIRequest(
   inputText: string,
   timeoutMs: number
 ): Promise<{ responseText: string; usageMetadata: any }> {
+  const attemptStart = Date.now();
   const response = await withTimeout(
     ai.models.generateContent({
       model: modelName,
@@ -113,6 +115,15 @@ async function attemptAIRequest(
 
   // Log token usage for cost analysis (only in development)
   logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
+
+  const durationMs = Date.now() - attemptStart;
+  if (ENABLE_TIMING_LOGS) {
+    console.info(`[${endpoint}] AI attempt`, {
+      model: modelName,
+      durationMs,
+      timeoutMs,
+    });
+  }
 
   return {
     responseText,
@@ -170,6 +181,13 @@ export async function processAIRequest(
       };
     } catch (error: any) {
       lastError = error;
+      if (ENABLE_TIMING_LOGS) {
+        console.warn(`[${endpoint}] AI attempt failed`, {
+          model: primary,
+          attempt,
+          error: error.message || error,
+        });
+      }
       
       // If this is a fallback-triggering error, don't retry primary
       if (shouldFallback(error)) {

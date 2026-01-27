@@ -38,9 +38,9 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
   fallback2: string;
 }> = {
   chat: {
-    primary: MODELS.FLASH_PREVIEW,
-    fallback1: MODELS.FLASH,
-    fallback2: MODELS.PRO,
+    primary: MODELS.FLASH_OLD,
+    fallback1: MODELS.PRO,
+    fallback2: MODELS.FLASH_PREVIEW,
   },
   lesson: {
     primary: MODELS.FLASH_PREVIEW,
