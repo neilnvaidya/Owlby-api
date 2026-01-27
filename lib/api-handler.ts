@@ -6,6 +6,23 @@ import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
  * Provides consistent error handling, CORS, and response patterns
  */
 
+const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 12000);
+const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 15000);
+const DEFAULT_AI_PRIMARY_ATTEMPTS = Number(process.env.AI_PRIMARY_ATTEMPTS ?? 1);
+const DEFAULT_AI_RETRY_BACKOFF_MS = Number(process.env.AI_RETRY_BACKOFF_MS ?? 250);
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  return new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    promise.then(resolve).catch(reject);
+  }).finally(() => clearTimeout(timeoutId));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Standard request validation and CORS handling
  */
@@ -54,6 +71,10 @@ function shouldFallback(error: any): boolean {
       errorMessage.includes('resource exhausted') || errorCode === '529') {
     return true;
   }
+
+  if (errorMessage.includes('ai_request_timeout')) {
+    return true;
+  }
   
   return false;
 }
@@ -68,11 +89,15 @@ async function attemptAIRequest(
   endpoint: string,
   inputText: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
-  const response = await ai.models.generateContent({
-    model: modelName,
-    config,
-    contents,
-  });
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: modelName,
+      config,
+      contents,
+    }),
+    DEFAULT_AI_TIMEOUT_MS,
+    'AI_REQUEST_TIMEOUT'
+  );
 
   const responseText = response.text || (
     Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
@@ -119,13 +144,18 @@ export async function processAIRequest(
   const { primary, fallback1, fallback2 } = routeConfig;
   let lastError: any = null;
   let fallbackUsed = false;
+  const startTime = Date.now();
 
   // Get route-specific temperature (defaults to 0.9 if not specified)
   const temperature = ROUTE_TEMPERATURES[endpoint] ?? 0.9;
 
-  // Attempt primary model (with one retry)
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  // Attempt primary model (configurable retry count)
+  const primaryAttempts = Math.max(1, DEFAULT_AI_PRIMARY_ATTEMPTS);
+  for (let attempt = 1; attempt <= primaryAttempts; attempt++) {
     try {
+      if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+        throw new Error('AI_TOTAL_TIMEOUT');
+      }
       const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
       const result = await attemptAIRequest(primary, config, contents, endpoint, inputText);
       
@@ -143,14 +173,20 @@ export async function processAIRequest(
       }
       
       // If this is the last attempt on primary, we'll try fallback
-      if (attempt === 2) {
+      if (attempt === primaryAttempts) {
         break;
       }
+
+      const backoffMs = DEFAULT_AI_RETRY_BACKOFF_MS * attempt;
+      await sleep(backoffMs);
     }
   }
 
   // Fallback to first fallback model (gemini-3-flash)
   try {
+    if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+      throw new Error('AI_TOTAL_TIMEOUT');
+    }
     const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
     const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText);
     
@@ -167,6 +203,9 @@ export async function processAIRequest(
 
   // Fallback to second fallback model (gemini-2.5-pro)
   try {
+    if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+      throw new Error('AI_TOTAL_TIMEOUT');
+    }
     const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
     const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText);
     
@@ -184,6 +223,10 @@ export async function processAIRequest(
       throw new Error('SERVICE_UNAVAILABLE_REGION');
     }
     
+    if (error.message === 'AI_TOTAL_TIMEOUT') {
+      throw new Error('AI_PROCESSING_TIMEOUT');
+    }
+
     throw new Error(`AI_PROCESSING_FAILED: ${error.message || 'Unknown error'}`);
   }
 }

@@ -8,6 +8,16 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY!
 );
 
+const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 3000);
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  return new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    promise.then(resolve).catch(reject);
+  }).finally(() => clearTimeout(timeoutId));
+}
+
 interface APILogData {
   route: 'chat' | 'lesson' | 'story';
   userId?: string;
@@ -238,7 +248,11 @@ class APILoggingService {
     this.buffer = [];
 
     try {
-      const { error, data } = await supabase.from('api_usage_logs').insert(batch);
+      const { error, data } = await withTimeout(
+        supabase.from('api_usage_logs').insert(batch),
+        LOG_FLUSH_TIMEOUT_MS,
+        'API_LOGGER_FLUSH_TIMEOUT'
+      );
 
       if (error) {
         console.error('[API LOGGER] Supabase insert error:', error, { batch });

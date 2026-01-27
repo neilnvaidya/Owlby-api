@@ -13,6 +13,30 @@ import { checkRateLimit } from '../../lib/rate-limit';
 
 // Toggle Supabase API logging - Always enabled for cost tracking
 const ENABLE_API_LOGGING = true;
+const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
+
+function logTimingSummary(data: {
+  totalMs: number;
+  authMs: number;
+  aiMs: number;
+  modelUsed: string;
+  fallbackUsed: boolean;
+  userId: string;
+  chatId: string;
+  success: boolean;
+}) {
+  if (!ENABLE_TIMING_LOGS) return;
+  console.info('[CHAT API] Timing summary', {
+    totalMs: data.totalMs,
+    authMs: data.authMs,
+    aiMs: data.aiMs,
+    modelUsed: data.modelUsed,
+    fallbackUsed: data.fallbackUsed,
+    userId: data.userId,
+    chatId: data.chatId,
+    success: data.success,
+  });
+}
 
 /**
  * Process the JSON response from Owlby chat API
@@ -115,7 +139,10 @@ export default async function handler(req: any, res: any) {
 
   let decoded: any;
   try {
+    const authStart = Date.now();
     decoded = await verifySupabaseToken(token);
+    const authDurationMs = Date.now() - authStart;
+    (req as any)._authDurationMs = authDurationMs;
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -140,7 +167,7 @@ export default async function handler(req: any, res: any) {
         error: 'BadRequest',
         model: 'unknown',
       });
-      await flushApiLogger();
+      void flushApiLogger();
     }
     
     return res.status(400).json({
@@ -223,7 +250,8 @@ export default async function handler(req: any, res: any) {
         systemInstructions,
         contents,
         'chat',
-        lastUserMessage
+        lastUserMessage,
+        2048
       );
       
       modelUsed = usedModel;
@@ -259,7 +287,7 @@ export default async function handler(req: any, res: any) {
         usageMetadata,
         model: modelUsed,
       });
-      await flushApiLogger();
+      void flushApiLogger();
 
     } catch (aiError: any) {
       // Always log chat API usage for cost tracking (even on errors)
@@ -273,7 +301,7 @@ export default async function handler(req: any, res: any) {
         error: aiError.message || 'UnknownError',
         model: modelUsed,
       });
-      await flushApiLogger();
+      void flushApiLogger();
 
       // Handle specific AI errors with fallback responses
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
@@ -306,7 +334,18 @@ export default async function handler(req: any, res: any) {
     }
 
     // Final flush before returning (logging already done above)
-    await flushApiLogger();
+    void flushApiLogger();
+
+    logTimingSummary({
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      chatId,
+      success: true,
+    });
     
     return res.status(200).json(processedResponse);
 
@@ -322,7 +361,18 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownApiError',
       model: modelUsed || 'unknown',
     });
-    await flushApiLogger();
+    void flushApiLogger();
+
+    logTimingSummary({
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      chatId: req.body?.chatId || 'unknown',
+      success: false,
+    });
 
     // Return graceful error response matching ChatResponse structure
     const errorMessage = error.message || 'Unknown error';

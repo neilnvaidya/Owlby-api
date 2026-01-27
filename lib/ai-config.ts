@@ -101,7 +101,7 @@ export function buildProConfig(
   responseSchema: any,
   systemInstruction: string,
   maxOutputTokens: number = 4096,
-  thinkingBudget: number = 1500,
+  thinkingBudget: number = 800,
   temperature: number = 0.9
 ) {
   return {
@@ -168,7 +168,7 @@ export function buildFlashPreviewConfig(
     maxOutputTokens,
     temperature: 1.0, // Always 1.0 for Gemini 3 models
     thinkingConfig: {
-      thinkingLevel: 'MEDIUM',
+      thinkingLevel: 'LOW',
     },
     mediaResolution: 'MEDIA_RESOLUTION_LOW',
   };
