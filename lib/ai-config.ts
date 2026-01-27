@@ -22,7 +22,7 @@ export const ai = new GoogleGenAI({
  */
 export const MODELS = {
   FLASH_PREVIEW: 'gemini-3-flash-preview',
-  FLASH: 'gemini-3-flash',
+  FLASH: 'gemini-3-flash-preview',
   FLASH_OLD: 'gemini-2.5-flash',
   PRO: 'gemini-2.5-pro',
 } as const;
