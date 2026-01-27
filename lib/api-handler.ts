@@ -87,7 +87,8 @@ async function attemptAIRequest(
   config: any,
   contents: any[],
   endpoint: string,
-  inputText: string
+  inputText: string,
+  timeoutMs: number
 ): Promise<{ responseText: string; usageMetadata: any }> {
   const response = await withTimeout(
     ai.models.generateContent({
@@ -95,7 +96,7 @@ async function attemptAIRequest(
       config,
       contents,
     }),
-    DEFAULT_AI_TIMEOUT_MS,
+    timeoutMs,
     'AI_REQUEST_TIMEOUT'
   );
 
@@ -153,11 +154,14 @@ export async function processAIRequest(
   const primaryAttempts = Math.max(1, DEFAULT_AI_PRIMARY_ATTEMPTS);
   for (let attempt = 1; attempt <= primaryAttempts; attempt++) {
     try {
-      if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+      const elapsedMs = Date.now() - startTime;
+      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      if (remainingMs <= 0) {
         throw new Error('AI_TOTAL_TIMEOUT');
       }
+      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText);
+      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText, timeoutMs);
       
       return {
         ...result,
@@ -185,11 +189,14 @@ export async function processAIRequest(
   if (fallback1 && fallback1 !== primary) {
     // Fallback to first fallback model (gemini-3-flash)
     try {
-      if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+      const elapsedMs = Date.now() - startTime;
+      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      if (remainingMs <= 0) {
         throw new Error('AI_TOTAL_TIMEOUT');
       }
+      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText);
+      const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText, timeoutMs);
       
       console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
       return {
@@ -208,11 +215,14 @@ export async function processAIRequest(
     if (fallback2 === primary || fallback2 === fallback1) {
       throw lastError || new Error('AI_PROCESSING_FAILED: duplicate fallback model');
     }
-    if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+    const elapsedMs = Date.now() - startTime;
+    const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+    if (remainingMs <= 0) {
       throw new Error('AI_TOTAL_TIMEOUT');
     }
+    const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
     const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText);
+    const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText, timeoutMs);
     
     console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
     return {
