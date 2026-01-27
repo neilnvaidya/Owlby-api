@@ -6,8 +6,8 @@ import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
  * Provides consistent error handling, CORS, and response patterns
  */
 
-const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 12000);
-const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 15000);
+const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000);
+const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 70000);
 const DEFAULT_AI_PRIMARY_ATTEMPTS = Number(process.env.AI_PRIMARY_ATTEMPTS ?? 1);
 const DEFAULT_AI_RETRY_BACKOFF_MS = Number(process.env.AI_RETRY_BACKOFF_MS ?? 250);
 

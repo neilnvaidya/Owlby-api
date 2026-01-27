@@ -125,6 +125,10 @@ export default async function handler(req: any, res: any) {
 
   const startTime = Date.now();
   let aiDurationMs = 0;
+  const timing: Record<string, number> = {};
+  const mark = (label: string, from: number) => {
+    timing[label] = Date.now() - from;
+  };
 
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '');
@@ -143,6 +147,7 @@ export default async function handler(req: any, res: any) {
     decoded = await verifySupabaseToken(token);
     const authDurationMs = Date.now() - authStart;
     (req as any)._authDurationMs = authDurationMs;
+    mark('authMs', authStart);
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -152,7 +157,9 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
+  const parseStart = Date.now();
   const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
+  mark('parseBodyMs', parseStart);
 
   // Validate required parameters
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
@@ -188,7 +195,9 @@ export default async function handler(req: any, res: any) {
   }
 
   // Basic per-user rate limiting to reduce spamming
+  const rateStart = Date.now();
   const rate = checkRateLimit(`chat:${userId}`, 10, 60 * 1000);
+  mark('rateLimitMs', rateStart);
   if (!rate.allowed) {
     return res.status(429).json({
       success: false,
@@ -225,12 +234,14 @@ export default async function handler(req: any, res: any) {
     
     // Build system instructions using existing utility
     // Use the last 3 messages for context (most recent conversation)
+    const instructionsStart = Date.now();
     const recentContext = messages
       .slice(-3)
       .map((m: any, idx: number) => `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`)
       .join('\n');
 
     const systemInstructions = getChatInstructions(gradeLevel, recentContext);
+    mark('instructionsMs', instructionsStart);
     
     // Create contents for AI request
     const contents = [
@@ -258,12 +269,17 @@ export default async function handler(req: any, res: any) {
       modelUsed = usedModel;
       fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
+      timing.aiMs = aiDurationMs;
       
       // Process complete response
+      const processStart = Date.now();
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
+      mark('processResponseMs', processStart);
       
       // Normalize achievement tags
+      const normalizeStart = Date.now();
       normalizeAchievementTags(processedResponse);
+      mark('normalizeTagsMs', normalizeStart);
       
       // Extensive logging for debugging interactive elements
       console.log('[CHAT API] Full response structure:', JSON.stringify({
@@ -277,6 +293,7 @@ export default async function handler(req: any, res: any) {
       }, null, 2));
 
       // Always log chat API usage for cost tracking
+      const logStart = Date.now();
       logChatCall({
         userId,
         chatId,
@@ -289,6 +306,7 @@ export default async function handler(req: any, res: any) {
         model: modelUsed,
       });
       void flushApiLogger();
+      mark('logEnqueueMs', logStart);
 
     } catch (aiError: any) {
       wasSuccessful = false;
@@ -348,6 +366,16 @@ export default async function handler(req: any, res: any) {
       chatId,
       success: wasSuccessful,
     });
+
+    if (ENABLE_TIMING_LOGS) {
+      console.info('[CHAT API] Timing breakdown', {
+        totalMs: Date.now() - startTime,
+        ...timing,
+        modelUsed,
+        fallbackUsed,
+        success: wasSuccessful,
+      });
+    }
     
     return res.status(200).json(processedResponse);
 
@@ -376,6 +404,17 @@ export default async function handler(req: any, res: any) {
       chatId: req.body?.chatId || 'unknown',
       success: wasSuccessful,
     });
+
+    if (ENABLE_TIMING_LOGS) {
+      console.info('[CHAT API] Timing breakdown', {
+        totalMs: Date.now() - startTime,
+        ...timing,
+        modelUsed,
+        fallbackUsed,
+        success: wasSuccessful,
+        error: error.message || 'UnknownError',
+      });
+    }
 
     // Return graceful error response matching ChatResponse structure
     const errorMessage = error.message || 'Unknown error';
