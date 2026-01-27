@@ -211,6 +211,7 @@ export default async function handler(req: any, res: any) {
   // Track model usage for logging (declared outside try/catch for scope)
   let modelUsed = 'unknown';
   let fallbackUsed = false;
+  let wasSuccessful = true;
   
   // Extract last user message for logging (declared outside try/catch for scope)
   const lastUserMessage = messages && messages.length > 0
@@ -290,6 +291,7 @@ export default async function handler(req: any, res: any) {
       void flushApiLogger();
 
     } catch (aiError: any) {
+      wasSuccessful = false;
       // Always log chat API usage for cost tracking (even on errors)
       logChatCall({
         userId,
@@ -344,12 +346,13 @@ export default async function handler(req: any, res: any) {
       fallbackUsed,
       userId,
       chatId,
-      success: true,
+      success: wasSuccessful,
     });
     
     return res.status(200).json(processedResponse);
 
   } catch (error: any) {
+    wasSuccessful = false;
     // Always log chat API usage for cost tracking (even on errors)
     logChatCall({
       userId,
@@ -371,7 +374,7 @@ export default async function handler(req: any, res: any) {
       fallbackUsed,
       userId,
       chatId: req.body?.chatId || 'unknown',
-      success: false,
+      success: wasSuccessful,
     });
 
     // Return graceful error response matching ChatResponse structure

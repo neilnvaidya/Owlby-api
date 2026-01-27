@@ -96,7 +96,9 @@ class APILoggingService {
 
   async logAPICall(data: APILogData): Promise<void> {
     try {
-      const modelName = data.model as keyof typeof this.PRICING;
+      const modelName = (data.model in this.PRICING
+        ? data.model
+        : 'gemini-3-flash-preview') as keyof typeof this.PRICING;
       
       // Extract token counts from Gemini API response
       // promptTokenCount = input tokens (prompt + system instruction)
@@ -105,7 +107,10 @@ class APILoggingService {
       // totalTokenCount = sum of all tokens
       const inputTokens = data.geminiUsageMetadata?.promptTokenCount || 0;
       const outputTokens = data.geminiUsageMetadata?.candidatesTokenCount || 0; // Response only, excludes thinking
-      const thinkingTokens = data.geminiUsageMetadata?.thinkingTokenCount || 0; // Only for models with thinking
+      const thinkingTokens =
+        data.geminiUsageMetadata?.thinkingTokenCount ??
+        (data.geminiUsageMetadata as any)?.thoughtsTokenCount ??
+        0; // Only for models with thinking
       
       // Calculate total tokens: input + output + thinking
       // Note: Gemini's totalTokenCount should equal this, but we calculate it ourselves for verification
@@ -248,8 +253,9 @@ class APILoggingService {
     this.buffer = [];
 
     try {
+      const insertPromise = supabase.from('api_usage_logs').insert(batch);
       const { error, data } = await withTimeout(
-        supabase.from('api_usage_logs').insert(batch),
+        insertPromise as unknown as Promise<any>,
         LOG_FLUSH_TIMEOUT_MS,
         'API_LOGGER_FLUSH_TIMEOUT'
       );
@@ -261,7 +267,7 @@ class APILoggingService {
       } else {
         console.info(`📊 Logged ${batch.length} API calls to database`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[API LOGGER] Failed to flush logs to Supabase:', error, { batch });
       this.buffer.unshift(...batch);
     }

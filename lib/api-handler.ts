@@ -182,27 +182,32 @@ export async function processAIRequest(
     }
   }
 
-  // Fallback to first fallback model (gemini-3-flash)
-  try {
-    if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
-      throw new Error('AI_TOTAL_TIMEOUT');
+  if (fallback1 && fallback1 !== primary) {
+    // Fallback to first fallback model (gemini-3-flash)
+    try {
+      if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
+        throw new Error('AI_TOTAL_TIMEOUT');
+      }
+      const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
+      const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText);
+      
+      console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
+      return {
+        ...result,
+        modelUsed: fallback1,
+        fallbackUsed: true,
+      };
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} failed, trying ${fallback2}`);
     }
-    const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText);
-    
-    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
-    return {
-      ...result,
-      modelUsed: fallback1,
-      fallbackUsed: true,
-    };
-  } catch (error: any) {
-    lastError = error;
-    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} failed, trying ${fallback2}`);
   }
 
   // Fallback to second fallback model (gemini-2.5-pro)
   try {
+    if (fallback2 === primary || fallback2 === fallback1) {
+      throw lastError || new Error('AI_PROCESSING_FAILED: duplicate fallback model');
+    }
     if (Date.now() - startTime > DEFAULT_AI_TOTAL_BUDGET_MS) {
       throw new Error('AI_TOTAL_TIMEOUT');
     }
