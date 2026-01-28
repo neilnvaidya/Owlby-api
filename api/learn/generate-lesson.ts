@@ -30,7 +30,11 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         keyPoints: lesson.keyPoints || [],
         keywords: lesson.keywords || [],
         challengeQuiz: {
-          questions: lesson.challengeQuiz || []
+          questions: Array.isArray(lesson.challengeQuiz?.questions)
+            ? lesson.challengeQuiz.questions
+            : Array.isArray(lesson.challengeQuiz)
+              ? lesson.challengeQuiz
+              : [],
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
