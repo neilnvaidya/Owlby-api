@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY!
 );
 
-const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 3000);
+const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 8000);
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
