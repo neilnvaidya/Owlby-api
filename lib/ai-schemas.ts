@@ -104,15 +104,21 @@ export const lessonResponseSchema = {
         },
         difficulty: { type: Type.INTEGER },
         challengeQuiz: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            required: ["question", "options", "correctAnswerIndex", "explanation"],
-            properties: {
-              question: { type: Type.STRING },
-              options: { type: Type.ARRAY, items: { type: Type.STRING } },
-              correctAnswerIndex: { type: Type.INTEGER },
-              explanation: { type: Type.STRING }
+          type: Type.OBJECT,
+          required: ["questions"],
+          properties: {
+            questions: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                required: ["question", "options", "correctAnswerIndex", "explanation"],
+                properties: {
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  correctAnswerIndex: { type: Type.INTEGER },
+                  explanation: { type: Type.STRING }
+                }
+              }
             }
           }
         },

@@ -100,7 +100,7 @@ export default async function handler(req: any, res: any) {
       error: 'BadRequest',
       model: 'unknown',
     });
-    await flushApiLogger();
+    void flushApiLogger();
     
     return res.status(400).json({
       success: false,
@@ -163,7 +163,7 @@ export default async function handler(req: any, res: any) {
       usageMetadata,
       model: modelUsed,
     });
-    await flushApiLogger();
+    void flushApiLogger();
     
     // Always include success flag
     return res.status(200).json({
@@ -182,13 +182,13 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownError',
       model: 'unknown',
     });
-    await flushApiLogger();
+    void flushApiLogger();
 
     // Create standardized error response
     const errorResponse = createErrorResponse(error, 'lesson', { 
       topic: req.body?.topic 
     });
     
-    return res.status(errorResponse.status === 200 ? 500 : errorResponse.status).json(errorResponse.body);
+    return res.status(errorResponse.status).json(errorResponse.body);
   }
 }
