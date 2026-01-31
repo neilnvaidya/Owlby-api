@@ -71,12 +71,10 @@ function processOwlbyResponse(responseText: string) {
             "Something new"
           ],
           learn_more: {
-            prompt: "Explore this topic further",
-            tags: ["learning", "education"]
+            topic: "Explore this topic further"
           },
           story_button: {
-            title: "Story Time!",
-            story_prompt: "Tell me a fun story about this topic"
+            prompt: "Tell me a fun story about this topic"
           }
         },
         content_blocks: {
@@ -186,8 +184,11 @@ export default async function handler(req: any, res: any) {
       },
       interactive_elements: {
         followup_buttons: ["Try again", "Ask something else"],
-        learn_more: { prompt: "", tags: [] },
-        story_button: { title: "", story_prompt: "" }
+        learn_more: { topic: "" },
+        story_button: { prompt: "" }
+      },
+      content_blocks: {
+        safety_filter: false
       },
       chatId: chatId || 'unknown',
       gradeLevel,
@@ -208,8 +209,11 @@ export default async function handler(req: any, res: any) {
       },
       interactive_elements: {
         followup_buttons: ["Try again soon"],
-        learn_more: { prompt: "", tags: [] },
-        story_button: { title: "", story_prompt: "" }
+        learn_more: { topic: "" },
+        story_button: { prompt: "" }
+      },
+      content_blocks: {
+        safety_filter: false
       },
       chatId: chatId || 'unknown',
       gradeLevel,
@@ -442,8 +446,11 @@ export default async function handler(req: any, res: any) {
       },
       interactive_elements: {
         followup_buttons: ["Try again", "Ask something else"],
-        learn_more: { prompt: "", tags: [] },
-        story_button: { title: "", story_prompt: "" }
+        learn_more: { topic: "" },
+        story_button: { prompt: "" }
+      },
+      content_blocks: {
+        safety_filter: false
       },
       chatId: req.body?.chatId || 'unknown',
       gradeLevel: req.body?.gradeLevel || 3,
