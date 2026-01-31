@@ -1,18 +1,43 @@
 import { logChatCall, flushApiLogger } from '../../lib/api-logger';
 
 import { chatResponseSchema } from '../../lib/ai-schemas';
-import { getChatInstructions } from '../../lib/ai-instructions';
+import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions';
 import { 
   handleCORS, 
   processAIRequest, 
   normalizeAchievementTags, 
   createErrorResponse 
 } from '../../lib/api-handler';
+import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config';
 import { verifySupabaseToken } from '../../lib/auth-supabase';
 import { checkRateLimit } from '../../lib/rate-limit';
 
 // Toggle Supabase API logging - Always enabled for cost tracking
 const ENABLE_API_LOGGING = true;
+const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
+
+function logTimingSummary(data: {
+  totalMs: number;
+  authMs: number;
+  aiMs: number;
+  modelUsed: string;
+  fallbackUsed: boolean;
+  userId: string;
+  chatId: string;
+  success: boolean;
+}) {
+  if (!ENABLE_TIMING_LOGS) return;
+  console.info('[CHAT API] Timing summary', {
+    totalMs: data.totalMs,
+    authMs: data.authMs,
+    aiMs: data.aiMs,
+    modelUsed: data.modelUsed,
+    fallbackUsed: data.fallbackUsed,
+    userId: data.userId,
+    chatId: data.chatId,
+    success: data.success,
+  });
+}
 
 /**
  * Process the JSON response from Owlby chat API
@@ -77,11 +102,34 @@ function processResponse(responseText: string, query: string, gradeLevel: number
 }
 
 export default async function handler(req: any, res: any) {
+  // Log incoming request to Vercel logs
+  const requestStartTime = Date.now();
+  const timestamp = new Date().toISOString();
+  const method = req.method || 'POST';
+  const url = req.url || '/api/chat/generate-response';
+  const userAgent = req.headers?.['user-agent'] || 'unknown';
+  const ip = req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || 'unknown';
+  
+  // Log incoming request to Vercel logs - using console.log for better visibility
+  console.log(`[CHAT API] ${timestamp} - ${method} ${url}`);
+  console.log(`[CHAT API] IP: ${ip} | User-Agent: ${userAgent}`);
+  console.log('[CHAT API] Request details:', JSON.stringify({
+    method,
+    url,
+    userAgent,
+    ip,
+    timestamp,
+  }, null, 2));
+
   // Handle CORS and validate request method
   if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
   let aiDurationMs = 0;
+  const timing: Record<string, number> = {};
+  const mark = (label: string, from: number) => {
+    timing[label] = Date.now() - from;
+  };
 
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '');
@@ -96,7 +144,11 @@ export default async function handler(req: any, res: any) {
 
   let decoded: any;
   try {
+    const authStart = Date.now();
     decoded = await verifySupabaseToken(token);
+    const authDurationMs = Date.now() - authStart;
+    (req as any)._authDurationMs = authDurationMs;
+    mark('authMs', authStart);
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -106,7 +158,9 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
+  const parseStart = Date.now();
   const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
+  mark('parseBodyMs', parseStart);
 
   // Validate required parameters
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
@@ -121,7 +175,7 @@ export default async function handler(req: any, res: any) {
         error: 'BadRequest',
         model: 'unknown',
       });
-      await flushApiLogger();
+      void flushApiLogger();
     }
     
     return res.status(400).json({
@@ -142,7 +196,9 @@ export default async function handler(req: any, res: any) {
   }
 
   // Basic per-user rate limiting to reduce spamming
+  const rateStart = Date.now();
   const rate = checkRateLimit(`chat:${userId}`, 10, 60 * 1000);
+  mark('rateLimitMs', rateStart);
   if (!rate.allowed) {
     return res.status(429).json({
       success: false,
@@ -165,6 +221,7 @@ export default async function handler(req: any, res: any) {
   // Track model usage for logging (declared outside try/catch for scope)
   let modelUsed = 'unknown';
   let fallbackUsed = false;
+  let wasSuccessful = true;
   
   // Extract last user message for logging (declared outside try/catch for scope)
   const lastUserMessage = messages && messages.length > 0
@@ -178,12 +235,17 @@ export default async function handler(req: any, res: any) {
     
     // Build system instructions using existing utility
     // Use the last 3 messages for context (most recent conversation)
+    const instructionsStart = Date.now();
     const recentContext = messages
       .slice(-3)
       .map((m: any, idx: number) => `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`)
       .join('\n');
 
-    const systemInstructions = getChatInstructions(gradeLevel, recentContext);
+    const primaryModel = ROUTE_MODEL_CONFIG.chat?.primary;
+    const systemInstructions = primaryModel === MODELS.FLASH_OLD
+      ? getChatInstructionsForFlash25(gradeLevel, recentContext)
+      : getChatInstructions(gradeLevel, recentContext);
+    mark('instructionsMs', instructionsStart);
     
     // Create contents for AI request
     const contents = [
@@ -204,18 +266,32 @@ export default async function handler(req: any, res: any) {
         systemInstructions,
         contents,
         'chat',
-        lastUserMessage
+        lastUserMessage,
+        2048
       );
       
       modelUsed = usedModel;
       fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
+      timing.aiMs = aiDurationMs;
+      const promptTokens = usageMetadata?.promptTokenCount ?? 0;
+      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
+      const thinkingTokens = usageMetadata?.thinkingTokenCount ?? usageMetadata?.thoughtsTokenCount ?? 0;
+      const totalTokens = usageMetadata?.totalTokenCount ?? (promptTokens + outputTokens + thinkingTokens);
+      timing.promptTokens = promptTokens;
+      timing.outputTokens = outputTokens;
+      timing.thinkingTokens = thinkingTokens;
+      timing.totalTokens = totalTokens;
       
       // Process complete response
+      const processStart = Date.now();
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
+      mark('processResponseMs', processStart);
       
       // Normalize achievement tags
+      const normalizeStart = Date.now();
       normalizeAchievementTags(processedResponse);
+      mark('normalizeTagsMs', normalizeStart);
       
       // Extensive logging for debugging interactive elements
       console.log('[CHAT API] Full response structure:', JSON.stringify({
@@ -229,6 +305,7 @@ export default async function handler(req: any, res: any) {
       }, null, 2));
 
       // Always log chat API usage for cost tracking
+      const logStart = Date.now();
       logChatCall({
         userId,
         chatId,
@@ -240,9 +317,11 @@ export default async function handler(req: any, res: any) {
         usageMetadata,
         model: modelUsed,
       });
-      await flushApiLogger();
+      void flushApiLogger();
+      mark('logEnqueueMs', logStart);
 
     } catch (aiError: any) {
+      wasSuccessful = false;
       // Always log chat API usage for cost tracking (even on errors)
       logChatCall({
         userId,
@@ -254,7 +333,7 @@ export default async function handler(req: any, res: any) {
         error: aiError.message || 'UnknownError',
         model: modelUsed,
       });
-      await flushApiLogger();
+      void flushApiLogger();
 
       // Handle specific AI errors with fallback responses
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
@@ -287,11 +366,33 @@ export default async function handler(req: any, res: any) {
     }
 
     // Final flush before returning (logging already done above)
-    await flushApiLogger();
+    void flushApiLogger();
+
+    logTimingSummary({
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      chatId,
+      success: wasSuccessful,
+    });
+
+    if (ENABLE_TIMING_LOGS) {
+      console.info('[CHAT API] Timing breakdown', {
+        totalMs: Date.now() - startTime,
+        ...timing,
+        modelUsed,
+        fallbackUsed,
+        success: wasSuccessful,
+      });
+    }
     
     return res.status(200).json(processedResponse);
 
   } catch (error: any) {
+    wasSuccessful = false;
     // Always log chat API usage for cost tracking (even on errors)
     logChatCall({
       userId,
@@ -303,7 +404,29 @@ export default async function handler(req: any, res: any) {
       error: error.message || 'UnknownApiError',
       model: modelUsed || 'unknown',
     });
-    await flushApiLogger();
+    void flushApiLogger();
+
+    logTimingSummary({
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      chatId: req.body?.chatId || 'unknown',
+      success: wasSuccessful,
+    });
+
+    if (ENABLE_TIMING_LOGS) {
+      console.info('[CHAT API] Timing breakdown', {
+        totalMs: Date.now() - startTime,
+        ...timing,
+        modelUsed,
+        fallbackUsed,
+        success: wasSuccessful,
+        error: error.message || 'UnknownError',
+      });
+    }
 
     // Return graceful error response matching ChatResponse structure
     const errorMessage = error.message || 'Unknown error';

@@ -21,29 +21,36 @@ export const ai = new GoogleGenAI({
  * Supported Gemini Models
  */
 export const MODELS = {
-  FLASH: 'gemini-2.5-flash',
+  FLASH_PREVIEW: 'gemini-3-flash-preview',
+  FLASH: 'gemini-3-flash-preview',
+  FLASH_OLD: 'gemini-2.5-flash',
   PRO: 'gemini-2.5-pro',
 } as const;
 
 /**
  * Route-specific model configuration
  * Defines primary and fallback models for each endpoint
+ * Fallback chain: preview -> flash -> 2.5-pro
  */
 export const ROUTE_MODEL_CONFIG: Record<string, {
   primary: string;
-  fallback: string;
+  fallback1: string;
+  fallback2: string;
 }> = {
   chat: {
-    primary: MODELS.PRO,
-    fallback: MODELS.FLASH,
+    primary: MODELS.FLASH_OLD,
+    fallback1: MODELS.PRO,
+    fallback2: MODELS.FLASH_PREVIEW,
   },
   lesson: {
-    primary: MODELS.PRO,
-    fallback: MODELS.FLASH,
+    primary: MODELS.FLASH_PREVIEW,
+    fallback1: MODELS.FLASH,
+    fallback2: MODELS.PRO,
   },
   story: {
-    primary: MODELS.PRO,
-    fallback: MODELS.FLASH,
+    primary: MODELS.FLASH_PREVIEW,
+    fallback1: MODELS.FLASH,
+    fallback2: MODELS.PRO,
   },
 };
 
@@ -94,7 +101,7 @@ export function buildProConfig(
   responseSchema: any,
   systemInstruction: string,
   maxOutputTokens: number = 4096,
-  thinkingBudget: number = 1500,
+  thinkingBudget: number = 800,
   temperature: number = 0.9
 ) {
   return {
@@ -143,8 +150,64 @@ export const ROUTE_TEMPERATURES: Record<string, number> = {
 };
 
 /**
+ * Build AI configuration for Gemini 3 Flash Preview
+ * Uses thinking config with thinkingLevel (new API)
+ * Temperature always 1.0 for Gemini 3 models
+ */
+export function buildFlashPreviewConfig(
+  responseSchema: any,
+  systemInstruction: string,
+  maxOutputTokens: number = 4096,
+  temperature: number = 1.0
+) {
+  return {
+    safetySettings: SAFETY_SETTINGS,
+    responseMimeType: 'application/json',
+    responseSchema,
+    systemInstruction: [{ text: systemInstruction }],
+    maxOutputTokens,
+    temperature: 1.0, // Always 1.0 for Gemini 3 models
+    thinkingConfig: {
+      thinkingLevel: 'LOW',
+    },
+    mediaResolution: 'MEDIA_RESOLUTION_LOW',
+  };
+}
+
+/**
+ * Build AI configuration for Gemini 3 Flash
+ * No thinking config (Flash does not support thinking)
+ * Temperature always 1.0 for Gemini 3 models
+ */
+export function buildFlash3Config(
+  responseSchema: any,
+  systemInstruction: string,
+  maxOutputTokens: number = 4096,
+  temperature: number = 1.0
+) {
+  return {
+    safetySettings: SAFETY_SETTINGS,
+    responseMimeType: 'application/json',
+    responseSchema,
+    systemInstruction: [{ text: systemInstruction }],
+    maxOutputTokens,
+    temperature: 1.0, // Always 1.0 for Gemini 3 models
+    mediaResolution: 'MEDIA_RESOLUTION_LOW',
+    // Note: Flash does not support thinkingConfig
+  };
+}
+
+/**
+ * Check if a model is a Gemini 3 model (preview, flash, or pro)
+ */
+function isGemini3Model(modelName: string): boolean {
+  return modelName.includes('gemini-3');
+}
+
+/**
  * Build AI configuration based on model name
  * Automatically selects the appropriate config builder
+ * Gemini 3 models always use temperature 1.0 regardless of route settings
  */
 export function buildAIConfig(
   modelName: string,
@@ -153,15 +216,23 @@ export function buildAIConfig(
   maxOutputTokens: number = 4096,
   temperature?: number
 ) {
-  const finalTemperature = temperature ?? 0.9;
-  if (modelName === MODELS.PRO) {
-    return buildProConfig(responseSchema, systemInstruction, maxOutputTokens, 1500, finalTemperature);
+  // Gemini 3 models always use temperature 1.0
+  const finalTemperature = isGemini3Model(modelName) ? 1.0 : (temperature ?? 0.9);
+  
+  if (modelName === MODELS.FLASH_PREVIEW) {
+    return buildFlashPreviewConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else if (modelName === MODELS.FLASH) {
+    return buildFlash3Config(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
+  } else if (modelName === MODELS.PRO) {
+    return buildProConfig(responseSchema, systemInstruction, maxOutputTokens, 1500, finalTemperature);
+  } else if (modelName === MODELS.FLASH_OLD) {
     return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else {
     // Default to Flash config for unknown models
     console.warn(`Unknown model ${modelName}, defaulting to Flash config`);
-    return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
+    // If unknown model looks like Gemini 3, use 1.0, otherwise use passed/default temp
+    const tempForUnknown = isGemini3Model(modelName) ? 1.0 : finalTemperature;
+    return buildFlash3Config(responseSchema, systemInstruction, maxOutputTokens, tempForUnknown);
   }
 }
 

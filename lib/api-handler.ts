@@ -6,6 +6,24 @@ import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
  * Provides consistent error handling, CORS, and response patterns
  */
 
+const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000);
+const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 70000);
+const DEFAULT_AI_PRIMARY_ATTEMPTS = Number(process.env.AI_PRIMARY_ATTEMPTS ?? 1);
+const DEFAULT_AI_RETRY_BACKOFF_MS = Number(process.env.AI_RETRY_BACKOFF_MS ?? 250);
+const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  let timeoutId: NodeJS.Timeout;
+  return new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
+    promise.then(resolve).catch(reject);
+  }).finally(() => clearTimeout(timeoutId));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /**
  * Standard request validation and CORS handling
  */
@@ -54,6 +72,10 @@ function shouldFallback(error: any): boolean {
       errorMessage.includes('resource exhausted') || errorCode === '529') {
     return true;
   }
+
+  if (errorMessage.includes('ai_request_timeout')) {
+    return true;
+  }
   
   return false;
 }
@@ -66,13 +88,19 @@ async function attemptAIRequest(
   config: any,
   contents: any[],
   endpoint: string,
-  inputText: string
+  inputText: string,
+  timeoutMs: number
 ): Promise<{ responseText: string; usageMetadata: any }> {
-  const response = await ai.models.generateContent({
-    model: modelName,
-    config,
-    contents,
-  });
+  const attemptStart = Date.now();
+  const response = await withTimeout(
+    ai.models.generateContent({
+      model: modelName,
+      config,
+      contents,
+    }),
+    timeoutMs,
+    'AI_REQUEST_TIMEOUT'
+  );
 
   const responseText = response.text || (
     Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
@@ -88,6 +116,15 @@ async function attemptAIRequest(
   // Log token usage for cost analysis (only in development)
   logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
 
+  const durationMs = Date.now() - attemptStart;
+  if (ENABLE_TIMING_LOGS) {
+    console.info(`[${endpoint}] AI attempt`, {
+      model: modelName,
+      durationMs,
+      timeoutMs,
+    });
+  }
+
   return {
     responseText,
     usageMetadata: response.usageMetadata
@@ -96,7 +133,7 @@ async function attemptAIRequest(
 
 /**
  * Standard AI request processing with retry and fallback logic
- * Attempts primary model twice, then falls back to secondary model on specific errors
+ * Attempts primary model twice, then falls back through: flash -> 2.5-pro
  */
 export async function processAIRequest(
   responseSchema: any,
@@ -116,18 +153,26 @@ export async function processAIRequest(
     throw new Error(`No model configuration found for endpoint: ${endpoint}`);
   }
 
-  const { primary, fallback } = routeConfig;
+  const { primary, fallback1, fallback2 } = routeConfig;
   let lastError: any = null;
   let fallbackUsed = false;
+  const startTime = Date.now();
 
   // Get route-specific temperature (defaults to 0.9 if not specified)
   const temperature = ROUTE_TEMPERATURES[endpoint] ?? 0.9;
 
-  // Attempt primary model (with one retry)
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  // Attempt primary model (configurable retry count)
+  const primaryAttempts = Math.max(1, DEFAULT_AI_PRIMARY_ATTEMPTS);
+  for (let attempt = 1; attempt <= primaryAttempts; attempt++) {
     try {
+      const elapsedMs = Date.now() - startTime;
+      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      if (remainingMs <= 0) {
+        throw new Error('AI_TOTAL_TIMEOUT');
+      }
+      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText);
+      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText, timeoutMs);
       
       return {
         ...result,
@@ -136,6 +181,13 @@ export async function processAIRequest(
       };
     } catch (error: any) {
       lastError = error;
+      if (ENABLE_TIMING_LOGS) {
+        console.warn(`[${endpoint}] AI attempt failed`, {
+          model: primary,
+          attempt,
+          error: error.message || error,
+        });
+      }
       
       // If this is a fallback-triggering error, don't retry primary
       if (shouldFallback(error)) {
@@ -143,31 +195,71 @@ export async function processAIRequest(
       }
       
       // If this is the last attempt on primary, we'll try fallback
-      if (attempt === 2) {
+      if (attempt === primaryAttempts) {
         break;
       }
+
+      const backoffMs = DEFAULT_AI_RETRY_BACKOFF_MS * attempt;
+      await sleep(backoffMs);
     }
   }
 
-  // Fallback to secondary model
+  if (fallback1 && fallback1 !== primary) {
+    // Fallback to first fallback model (gemini-3-flash)
+    try {
+      const elapsedMs = Date.now() - startTime;
+      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      if (remainingMs <= 0) {
+        throw new Error('AI_TOTAL_TIMEOUT');
+      }
+      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
+      const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
+      const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText, timeoutMs);
+      
+      console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
+      return {
+        ...result,
+        modelUsed: fallback1,
+        fallbackUsed: true,
+      };
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} failed, trying ${fallback2}`);
+    }
+  }
+
+  // Fallback to second fallback model (gemini-2.5-pro)
   try {
-    const config = buildAIConfig(fallback, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(fallback, config, contents, endpoint, inputText);
+    if (fallback2 === primary || fallback2 === fallback1) {
+      throw lastError || new Error('AI_PROCESSING_FAILED: duplicate fallback model');
+    }
+    const elapsedMs = Date.now() - startTime;
+    const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+    if (remainingMs <= 0) {
+      throw new Error('AI_TOTAL_TIMEOUT');
+    }
+    const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
+    const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
+    const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText, timeoutMs);
     
-    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback} succeeded`);
+    console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
     return {
       ...result,
-      modelUsed: fallback,
+      modelUsed: fallback2,
       fallbackUsed: true,
     };
   } catch (error: any) {
-    console.error(`❌ [${endpoint}] Both models failed. Last error:`, error.message);
+    console.error(`❌ [${endpoint}] All models failed. Last error:`, error.message);
     
     // Handle specific error types for final error reporting
     if (error.message && error.message.includes('User location is not supported')) {
       throw new Error('SERVICE_UNAVAILABLE_REGION');
     }
     
+    if (error.message === 'AI_TOTAL_TIMEOUT') {
+      throw new Error('AI_PROCESSING_TIMEOUT');
+    }
+
     throw new Error(`AI_PROCESSING_FAILED: ${error.message || 'Unknown error'}`);
   }
 }
