@@ -1,0 +1,169 @@
+Privacy Policy
+
+Last updated: See file or API response for current date. Update this line when you change the policy.
+
+1. Introduction
+
+Owlby ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our AI-powered learning platform.
+
+2. Information We Collect
+
+Owlby operates on a data minimization model. We collect only the minimal information necessary to provide our educational service and comply with legal requirements.
+
+2.1 Personal Information
+
+We may collect the following personal information:
+- Parent/guardian email address (for account creation and consent management)
+- Age and classification (parent, teacher, child, other)
+- Learning preferences and progress data (for personalization)
+
+2.2 Conversation Data - Minimal Retention Policy
+
+Important: We minimize conversation data storage.
+
+User conversations with our AI are:
+- Processed in real-time to generate educational responses
+- Retained only as necessary for service functionality and safety monitoring
+- Not used to train AI models or build detailed user profiles
+- Subject to our data retention and deletion policies
+
+We keep anonymized, aggregated insights for service improvement - never personal conversation content that identifies individual users.
+
+2.3 Usage Data
+
+We collect minimal information about how you interact with our platform:
+- Learning sessions and topics explored (aggregated, anonymized)
+- Quiz results and progress tracking (for educational personalization)
+- Feature usage and preferences (anonymized)
+- Technical data (device type, browser - for compatibility only)
+
+2.4 Data We Do NOT Collect
+
+We do NOT collect:
+- Personal identifiers (names, addresses, phone numbers beyond email)
+- Location information
+- Biometric data
+- Behavioral tracking data
+- Device identifiers for tracking purposes
+- Social interaction data
+
+3. How We Use Your Information
+
+We use the collected information for:
+- Providing personalized learning experiences
+- Improving our AI algorithms and content
+- Communicating with you about beta updates
+- Ensuring platform security and preventing abuse
+- Complying with legal obligations
+
+4. COPPA Compliance & Children's Privacy
+
+Owlby is fully compliant with the Children's Online Privacy Protection Act (COPPA) and takes special care to protect children's privacy.
+
+4.1 Parental Consent
+
+For users under 13, we require:
+- Verifiable parental consent before account creation
+- Parent/guardian email for consent verification
+- Clear explanation of what data is collected and how it's used
+- Easy mechanism for parents to withdraw consent at any time
+
+4.2 Data Collection for Children
+
+For children under 13, we:
+- Collect only minimal information necessary for the educational service
+- Do NOT store conversation content (processed and deleted immediately)
+- Do NOT share children's data with third parties
+- Do NOT use children's data for advertising or marketing
+- Implement enhanced security measures for children's data
+
+4.3 Parental Rights
+
+Parents have the right to:
+- Review all data collected about their child
+- Request deletion of their child's data at any time
+- Withdraw consent and terminate their child's account
+- Refuse further collection or use of their child's data
+- Access their child's learning progress and account information
+
+To exercise these rights, contact us at privacy@owlby.com.
+
+5. Data Security
+
+We implement appropriate security measures to protect your information:
+- Encryption of data in transit and at rest
+- Regular security audits and updates
+- Limited access to personal data
+- Secure data storage practices
+
+6. Data Retention & Deletion
+
+We follow a strict data retention policy with immediate deletion where possible:
+- Conversations: Retained only as necessary for service functionality, safety, and compliance, then deleted according to our retention schedule
+- Account data: Retained until account deletion (parents can request immediate deletion)
+- Learning progress data: Retained for personalization purposes until account deletion
+- Parental consent records: Retained for compliance purposes as required by COPPA
+- Anonymized analytics: Aggregated, anonymized data retained for service improvement
+- Security logs: Retained for 30 days for security purposes
+- Legal requirements: Minimal data retention only as required by law
+
+Upon account deletion request, we will delete all personal data within 30 days, except where retention is required by law.
+
+7. Your Privacy Rights (GDPR & CCPA)
+
+You have comprehensive privacy rights under GDPR, CCPA, and other applicable laws:
+- Access your personal information and receive a copy of your data
+- Know what personal information we collect and how it's used
+- Correct inaccurate or incomplete personal information
+- Request deletion of your personal data ("right to be forgotten")
+- Request deletion of your child's data (for parents)
+- Export your data in a machine-readable format
+- Object to certain types of data processing
+- Withdraw consent at any time
+
+To exercise any of these rights, please contact us at privacy@owlby.com. We will respond within 30 days as required by law.
+
+8. Cookies & Tracking Technologies
+
+Owlby uses minimal cookies and tracking technologies, only what is essential for platform functionality. We use only essential cookies required for authentication, platform functionality and security, and user preferences. We do NOT use third-party tracking cookies, advertising cookies, or behavioral tracking technologies.
+
+9. Data Sharing & Third Parties
+
+We do not share personal data with third parties for advertising or marketing. For core functionality we use the following essential service providers: Supabase (authentication and database storage) and Google Gemini (AI-powered chat, lessons, and stories). Each is used only as necessary to provide the service and under strict data protection practices.
+
+9.1 Use of Third-Party AI for Chat and Learning
+
+We use Google's Gemini AI service to generate chat responses, lessons, and stories. This is required for Owlby's educational features to work.
+
+What data we send to Gemini:
+- Message text (what the user types or says in chat)
+- Grade level (for age-appropriate content)
+- Brief conversation context (recent messages only, to keep the conversation coherent)
+
+We do not send your name, email address, or other personal identifiers to the AI service. Data sent to Gemini is used solely to generate educational responses and is processed in accordance with Google's terms and privacy practices. You can review Google AI Terms (https://ai.google.dev/terms) and Google Privacy Policy (https://policies.google.com/privacy).
+
+Our broader commitment:
+- No personal data shared with advertisers or marketing companies
+- No personal data shared with analytics or tracking services
+- No personal data shared with data brokers
+- All service providers process data only as instructed by us
+
+10. International Data Transfers
+
+If you are located outside the United States, we may transfer and process your data in the United States or other jurisdictions. We ensure appropriate safeguards are in place for international data transfers. By using our service, you consent to the transfer of your information as described in this policy.
+
+11. Data Breach Notification
+
+In the unlikely event of a data breach affecting your personal information, we will notify affected users within 72 hours as required by GDPR, notify parents immediately if children's data is affected (COPPA), and notify relevant authorities as required by law.
+
+12. Changes to This Privacy Policy
+
+We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy with a new "Last updated" date and, where appropriate, by email. Your continued use of the service after changes constitute acceptance of the updated policy.
+
+13. Contact Us
+
+Owlby AI LLP
+Privacy Officer: privacy@owlby.com
+General Support: support@owlby.com
+
+For privacy questions, data requests, or COPPA/GDPR inquiries, contact privacy@owlby.com. We aim to respond within 48 hours.

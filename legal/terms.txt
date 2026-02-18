@@ -1,0 +1,114 @@
+Terms & Conditions
+
+Last updated: See file or API response for current date. Update this line when you change the terms.
+
+1. Acceptance of Terms
+
+By accessing and using Owlby, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service.
+
+2. Description of Service
+
+Owlby is an AI-powered learning platform designed to support teacher-led, self-directed learning. We provide personalized educational content, interactive learning experiences, and progress tracking tools that empower students to learn independently about topics that interest them.
+
+The service is currently in beta and may be subject to changes and updates as we continue to develop and improve the platform.
+
+3. User Accounts
+
+3.1 Account Creation
+
+To use certain features of Owlby, you must create an account. You agree to:
+- Provide accurate and complete information
+- Maintain the security of your account credentials
+- Notify us immediately of any unauthorized use
+- Accept responsibility for all activities under your account
+
+3.2 Age Requirements
+
+Users under 18 must:
+- Have parental consent to create an account
+- Provide parent/guardian contact information
+- Use the service under parental supervision
+
+4. Acceptable Use
+
+You agree not to use the service to:
+- Violate any applicable laws or regulations
+- Infringe on intellectual property rights
+- Harass, abuse, or harm others
+- Attempt to gain unauthorized access to our systems
+- Interfere with the proper functioning of the service
+- Share inappropriate or harmful content
+
+5. Content and Intellectual Property
+
+5.1 Our Content
+
+All content provided by Owlby, including but not limited to text, graphics, software, and AI-generated responses, is owned by Owlby AI LLP and protected by copyright laws.
+
+5.2 User Content
+
+You retain ownership of content you submit to the platform. By submitting content, you grant us a license to use, modify, and display it for the purpose of providing our service.
+
+6. Privacy and Data Protection
+
+Your privacy is important to us. Our collection and use of personal information is governed by our Privacy Policy, which is incorporated into these Terms by reference.
+
+7. Beta Program
+
+Owlby is currently in beta. By participating, you acknowledge that:
+- The service may contain bugs or incomplete features
+- We may make changes without notice
+- Service availability is not guaranteed
+- We may collect feedback and usage data
+
+8. Disclaimers
+
+The service is provided "as is" without warranties of any kind. We do not guarantee uninterrupted or error-free service, accuracy of AI-generated content, compatibility with all devices, or specific learning outcomes.
+
+9. Limitation of Liability
+
+To the maximum extent permitted by law, Owlby AI LLP shall not be liable for any indirect, incidental, special, consequential, or punitive damages. Our total liability for any claims arising from your use of the service shall not exceed the amount you paid us in the 12 months preceding the claim. We are not liable for loss of data, profits, or business opportunities, or for damages resulting from unauthorized access or from the accuracy of AI-generated content. Some jurisdictions do not allow the exclusion of certain warranties or limitation of liability, so some of the above may not apply to you.
+
+9.1 Indemnification
+
+You agree to indemnify, defend, and hold harmless Owlby AI LLP, its officers, directors, employees, and agents from and against any claims, liabilities, damages, losses, and expenses arising out of your use of the service, your violation of these Terms, your violation of any third-party rights, or content you submit through the service.
+
+10. Service Availability
+
+We strive to provide reliable service but cannot guarantee uninterrupted or error-free service, 100% uptime, or that the service will be free from viruses. We may perform scheduled or unscheduled maintenance that may temporarily interrupt service.
+
+11. Termination
+
+11.1 Termination by Us
+
+We may terminate or suspend your account immediately, without prior notice, if you violate these Terms or our Privacy Policy, engage in fraudulent or illegal activity, we are required to do so by law, or we discontinue the service.
+
+11.2 Termination by You
+
+You may terminate your account at any time by contacting support@owlby.com. Upon termination, your right to use the service will immediately cease; we will delete your account and personal data as described in our Privacy Policy.
+
+12. Changes to Terms and Service
+
+We reserve the right to modify these Terms at any time. We will notify users of material changes by posting the updated Terms with a new "Last updated" date and, where appropriate, by email. Your continued use after changes constitute acceptance. If you do not agree, you must stop using the service and terminate your account.
+
+We reserve the right to modify, suspend, or discontinue any part of the service at any time, with or without notice.
+
+13. Dispute Resolution
+
+Before filing a claim, you agree to contact us at legal@owlby.com to attempt to resolve the dispute informally. These Terms shall be governed by the laws of the jurisdiction where Owlby AI LLP is registered. Any legal action shall be brought exclusively in the courts of that jurisdiction. You agree that dispute resolution will be conducted only on an individual basis and not in a class, consolidated, or representative action.
+
+14. Intellectual Property Rights
+
+All content, features, and functionality of the service are owned by Owlby AI LLP or its licensors and are protected by intellectual property laws. We grant you a limited, non-exclusive, non-transferable, revocable license to access and use the service for personal, non-commercial educational purposes only. You may not copy, modify, reverse engineer, remove copyright notices, use for commercial purpose, or transfer your rights.
+
+15. Miscellaneous
+
+These Terms, together with our Privacy Policy, constitute the entire agreement between you and Owlby AI LLP. If any provision is found unenforceable, the remaining provisions remain in effect. No waiver of any term shall be deemed a continuing waiver. You may not assign these Terms without our consent; we may assign without restriction.
+
+16. Contact Information
+
+Owlby AI LLP
+Legal Inquiries: legal@owlby.com
+General Support: support@owlby.com
+
+We aim to respond within 48 hours. You can also visit our Support page for additional resources.
