@@ -1,4 +1,3 @@
-<<<<<<< Updated upstream
 {
   "rewrites": [
     {
@@ -12,10 +11,6 @@
     {
       "source": "/verify-email",
       "destination": "/api/verify-email"
-    },
-    {
-      "source": "/update-profile",
-      "destination": "/api/update-profile"
     },
     {
       "source": "/profile",
@@ -40,9 +35,14 @@
     {
       "source": "/feedback/submit",
       "destination": "/api/feedback/submit"
+    },
+    {
+      "source": "/webhooks/revenuecat",
+      "destination": "/api/webhooks/revenuecat"
+    },
+    {
+      "source": "/subscription-status",
+      "destination": "/api/subscription-status"
     }
   ]
-} 
-=======
-{"rewrites":[{"source":"/health","destination":"/api/health"},{"source":"/achievements/sync","destination":"/api/achievements/sync"},{"source":"/verify-email","destination":"/api/verify-email"},{"source":"/profile","destination":"/api/profile"},{"source":"/learn/lesson","destination":"/api/learn/generate-lesson"},{"source":"/learn/generate-lesson","destination":"/api/learn/generate-lesson"},{"source":"/chat/response","destination":"/api/chat/generate-response"},{"source":"/chat/generate-response","destination":"/api/chat/generate-response"},{"source":"/feedback/submit","destination":"/api/feedback/submit"},{"source":"/webhooks/revenuecat","destination":"/api/webhooks/revenuecat"},{"source":"/subscription-status","destination":"/api/subscription-status"}]}
->>>>>>> Stashed changes
+}
