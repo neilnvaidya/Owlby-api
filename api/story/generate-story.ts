@@ -9,6 +9,8 @@ import {
 } from '../../lib/api-handler';
 import { verifySupabaseToken } from '../../lib/auth-supabase';
 import { checkRateLimit } from '../../lib/rate-limit';
+import { canGenerate } from '../../lib/subscription-gate';
+import { incrementDailyUsage } from '../../lib/usage-daily';
 
 /**
  * Process the JSON response from story generation API
@@ -71,6 +73,18 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
+
+  const gate = await canGenerate(userId, 'story');
+  if (!gate.allowed) {
+    return res.status(403).json({
+      success: false,
+      code: gate.reason,
+      userMessage: gate.reason === 'daily_limit_reached'
+        ? "You've reached your daily limit. Upgrade for unlimited access."
+        : 'A subscription is required for this feature.',
+    });
+  }
+
   const { prompt, gradeLevel = 3, tags } = req.body;
   const contextTags = Array.isArray(tags) ? tags : [];
   
@@ -161,7 +175,8 @@ export default async function handler(req: any, res: any) {
     });
     void flushApiLogger();
     
-    // Always include success flag
+    incrementDailyUsage(userId, 'story');
+
     return res.status(200).json({
       ...processedResponse,
       success: true
