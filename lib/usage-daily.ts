@@ -13,12 +13,12 @@ type Route = 'chat' | 'lesson' | 'story';
 export function incrementDailyUsage(userId: string, route: Route): void {
   const today = new Date().toISOString().slice(0, 10);
 
-  supabase
+  (supabase
     .rpc('increment_daily_usage', {
       p_user_id: userId,
       p_date: today,
       p_route: route,
-    })
+    }) as Promise<{ error: { message?: string } | null }>)
     .then(({ error }) => {
       if (error) {
         console.error('[USAGE] Failed to increment daily usage:', error.message);

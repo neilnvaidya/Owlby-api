@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/api/health"
+      "destination": "/api/status?scope=health"
     },
     {
       "source": "/achievements/sync",
@@ -15,6 +15,10 @@
     {
       "source": "/profile",
       "destination": "/api/profile"
+    },
+    {
+      "source": "/update-profile",
+      "destination": "/api/profile?context=onboarding"
     },
     {
       "source": "/learn/lesson",
@@ -42,7 +46,35 @@
     },
     {
       "source": "/subscription-status",
-      "destination": "/api/subscription-status"
+      "destination": "/api/status?scope=subscription"
+    },
+    {
+      "source": "/api/subscription-status",
+      "destination": "/api/status?scope=subscription"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/status?scope=health"
+    },
+    {
+      "source": "/api/update-profile",
+      "destination": "/api/profile?context=onboarding"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/api/delete-account",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/api/send-verification",
+      "destination": "/api/email-verification?action=send"
+    },
+    {
+      "source": "/api/resend-verification",
+      "destination": "/api/email-verification?action=resend"
     }
   ]
 }

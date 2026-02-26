@@ -3,7 +3,42 @@ import { verifySupabaseToken } from '../lib/auth-supabase';
 import { supabase } from '../lib/supabase';
 import { createVerificationToken } from '../lib/verification-token';
 
-const webBaseUrl = process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://owlby.com';
+const webBaseUrl =
+  process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://owlby.com';
+
+async function getOrCreateUser(authUid: string, email: string) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('auth_uid', authUid)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    throw error;
+  }
+
+  if (data) {
+    return data;
+  }
+
+  const now = new Date().toISOString();
+  const { data: inserted, error: insertError } = await supabase
+    .from('users')
+    .insert({
+      auth_uid: authUid,
+      email,
+      created_at: now,
+      updated_at: now,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return inserted;
+}
 
 async function findUser(authUid: string) {
   const { data, error } = await supabase
@@ -55,9 +90,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ success: false, error: 'Email is required on token' });
     }
 
-    const user = await findUser(decoded.id);
-    if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found for resend' });
+    const actionFromQuery =
+      typeof req.query.action === 'string' ? req.query.action : undefined;
+    const actionFromBody =
+      typeof (req.body as any)?.action === 'string' ? (req.body as any).action : undefined;
+    const action = (actionFromQuery || actionFromBody || 'send').toLowerCase();
+
+    let user;
+    if (action === 'resend') {
+      user = await findUser(decoded.id);
+      if (!user) {
+        return res
+          .status(404)
+          .json({ success: false, error: 'User not found for resend' });
+      }
+    } else {
+      user = await getOrCreateUser(decoded.id, email);
     }
 
     if (user.email_verified_at) {
@@ -66,18 +114,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await ensureNotRateLimited(user.id);
 
-    const { token: verificationToken, expiresAt } = await createVerificationToken(user.id, email);
-    const verificationLink = `${webBaseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+    const { token: verificationToken, expiresAt } = await createVerificationToken(
+      user.id,
+      email
+    );
+    const verificationLink = `${webBaseUrl}/verify-email?token=${encodeURIComponent(
+      verificationToken
+    )}`;
 
-    // NOTE: Email dispatch should be wired to your provider. For now we return the link for the caller to send.
     return res.status(200).json({
       success: true,
       link: verificationLink,
       expires_at: expiresAt,
     });
   } catch (error: any) {
-    console.error('resend-verification error:', error);
-    return res.status(400).json({ success: false, error: error?.message || 'Failed to resend verification' });
+    console.error('email-verification error:', error);
+    return res.status(400).json({
+      success: false,
+      error: error?.message || 'Failed to process email verification request',
+    });
   }
 }
 
