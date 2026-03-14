@@ -4,7 +4,6 @@ import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai
 import {
   handleCORS,
   processAIRequest,
-  normalizeAchievementTags,
 } from '../../lib/api-handler';
 import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config';
 import { verifySupabaseToken } from '../../lib/auth-supabase';
@@ -309,7 +308,9 @@ export default async function handler(req: any, res: any) {
 
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
 
-      normalizeAchievementTags(processedResponse);
+      // Tags come from the dedicated tags API (frontend calls it after this response)
+      processedResponse.requiredCategoryTags = [];
+      processedResponse.optionalTags = [];
 
       console.log(
         '[CHAT API] Full response structure:',
