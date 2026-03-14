@@ -104,7 +104,7 @@ CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
 
 OUTPUT RULES (MUST COMPLY):
 1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
-2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
+2. JSON root keys: response_text, interactive_elements only.
 3. response_text.main: 2–3 paragraphs (300-1000 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
    - Use markdown formatting: **bold** important keywords, terms, or concepts
    - Bold key scientific terms, names, historical figures, or important concepts
@@ -112,12 +112,10 @@ OUTPUT RULES (MUST COMPLY):
    - You can use bullet points (- item) for lists and structured information when helpful
 4. response_text.follow_up: ONE complete engaging follow-up question (50-200 characters). MUST be a complete sentence ending with a question mark.
 5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
-6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" } (e.g., "Olympic swimming" not "Olympic swimming, Siobhan Haughey"). The topic should be clean and simple - detailed context goes in optionalTags.
+6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" } (e.g., "Olympic swimming" not "Olympic swimming, Siobhan Haughey"). The topic should be clean and simple.
 7. interactive_elements.story_button: Include when a short story could illustrate the topic. Structure: { "prompt": "simple story prompt" } (e.g., "a swimmer" not "Tell me a story about a swimmer").
 
 CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
-
-${TAG_OUTPUT_RULES}
 
 Recent conversation context:
 ${recentContext}
@@ -145,7 +143,7 @@ CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
 
 OUTPUT RULES (MUST COMPLY):
 1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
-2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags.
+2. JSON root keys: response_text, interactive_elements only.
 3. response_text.main: 1–2 short paragraphs (200-600 characters total). CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis.
    - Use markdown formatting: **bold** important keywords, terms, or concepts
    - Keep bolding natural and educational - typically 1-2 bolded terms per paragraph
@@ -155,8 +153,6 @@ OUTPUT RULES (MUST COMPLY):
 7. interactive_elements.story_button: Include only if a short story would clearly help learning.
 
 CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
-
-${TAG_OUTPUT_RULES}
 
 Recent conversation context:
 ${recentContext}

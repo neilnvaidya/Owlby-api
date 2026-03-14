@@ -50,30 +50,29 @@ export const tagsResponseSchema = {
 } as const;
 
 /**
- * Chat response schema for conversational AI interactions
+ * Chat response schema for conversational AI interactions (no tags – tags come from dedicated tags API)
  */
 export const chatResponseSchema = {
   type: Type.OBJECT,
-  required: ["response_text", "interactive_elements", "optionalTags"],
+  required: ['response_text', 'interactive_elements'],
   properties: {
-    ...ACHIEVEMENT_TAGS_SCHEMA,
     response_text: {
       type: Type.OBJECT,
-      required: ["main"],
+      required: ['main'],
       properties: {
-        main: { 
+        main: {
           type: Type.STRING,
-          description: "Complete response text, 300-1000 characters. Must be complete sentences, never truncated."
+          description: 'Complete response text, 300-1000 characters. Must be complete sentences, never truncated.',
         },
-        follow_up: { 
+        follow_up: {
           type: Type.STRING,
-          description: "Complete follow-up question, 50-200 characters. Must end with a question mark."
+          description: 'Complete follow-up question, 50-200 characters. Must end with a question mark.',
         },
       },
     },
     interactive_elements: {
       type: Type.OBJECT,
-      required: ["followup_buttons", "story_button", "learn_more"],
+      required: ['followup_buttons', 'story_button', 'learn_more'],
       properties: {
         followup_buttons: {
           type: Type.ARRAY,
