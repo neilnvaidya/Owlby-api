@@ -38,12 +38,6 @@
     "ts-jest": "^29.3.2"
   },
   "engines": {
-    "node": ">=20"
-  },
-  "overrides": {
-    "undici": ">=6.24.0",
-    "path-to-regexp": ">=6.3.0",
-    "ajv": ">=8.18.0",
-    "minimatch": ">=10.2.3"
+    "node": "22.x"
   }
 }
