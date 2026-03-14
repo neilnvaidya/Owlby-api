@@ -31,6 +31,31 @@ function buildMessages(systemInstruction: string, contents: any[]): Array<{ role
 }
 
 /**
+ * For DeepSeek (json_object only): append an EXAMPLE JSON OUTPUT to the system prompt
+ * so the model knows the exact structure. DeepSeek docs recommend including the word "json"
+ * and an example of the desired format.
+ */
+function getJsonExampleForDeepSeek(responseSchema: any): string {
+  const props = responseSchema?.properties || {};
+  if (props.response_text && props.interactive_elements) {
+    return `
+Output valid JSON only. No markdown. Example structure:
+{"response_text":{"main":"Your answer here.","follow_up":"A follow-up question?"},"interactive_elements":{"followup_buttons":["Tell me more","Another angle"],"story_button":{},"learn_more":{}},"requiredCategoryTags":["TOPIC"],"optionalTags":["context tag"]}`;
+  }
+  if (props.lesson) {
+    return `
+Output valid JSON only. No markdown. Example structure:
+{"lesson":{"title":"Title","introduction":"Intro sentence","body":["Paragraph 1"],"conclusion":"Conclusion","keyPoints":["Point 1"],"keywords":[{"term":"word","definition":"meaning"}],"difficulty":10,"challengeQuiz":{"questions":[{"question":"Q?","options":["A","B","C","D"],"correctAnswerIndex":0,"explanation":"Why"}]}},"requiredCategoryTags":["TOPIC"],"optionalTags":[]}`;
+  }
+  if (props.story) {
+    return `
+Output valid JSON only. No markdown. Example structure:
+{"story":{"title":"Story Title","content":["Paragraph 1.","Paragraph 2."],"characters":["Name"],"setting":"Where and when"},"requiredCategoryTags":["TOPIC"],"optionalTags":[]}`;
+  }
+  return '\nOutput valid JSON only. No markdown.';
+}
+
+/**
  * Execute a request using an OpenAI-compatible API (OpenAI, DeepSeek, Azure, etc.).
  * Set OPENAI_API_KEY and optionally OPENAI_BASE_URL (e.g. for DeepSeek).
  * Returns normalized responseText and usageMetadata.
@@ -48,22 +73,30 @@ export async function executeOpenAI(
     throw new Error('OPENAI_API_KEY is not set; cannot use OpenAI-compatible provider');
   }
 
-  const messages = buildMessages(systemInstruction, contents);
-  const jsonSchema = geminiSchemaToJsonSchema(responseSchema);
+  // DeepSeek only supports type: 'json_object'; add schema as example in system prompt per DeepSeek docs.
+  const isDeepSeek = modelId.toLowerCase().includes('deepseek');
+  const systemWithExample = isDeepSeek
+    ? systemInstruction + getJsonExampleForDeepSeek(responseSchema)
+    : systemInstruction;
+  const messages = buildMessages(systemWithExample, contents);
+
+  const responseFormat = isDeepSeek
+    ? { type: 'json_object' as const }
+    : {
+        type: 'json_schema' as const,
+        json_schema: {
+          name: 'owlby_response',
+          strict: true,
+          schema: geminiSchemaToJsonSchema(responseSchema),
+        },
+      };
 
   const body = {
     model: modelId,
     messages,
     max_tokens: maxOutputTokens,
     temperature,
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'owlby_response',
-        strict: true,
-        schema: jsonSchema,
-      },
-    },
+    response_format: responseFormat,
   };
 
   const url = OPENAI_BASE_URL.replace(/\/$/, '') + '/v1/chat/completions';
