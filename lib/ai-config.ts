@@ -32,9 +32,9 @@ export const MODELS = {
  * Add OpenAI-compatible model ids (e.g. gpt-4o-mini, deepseek-chat) with 'openai'.
  * Unknown models default to 'gemini' in getProviderForModel().
  */
+// FLASH and FLASH_PREVIEW are the same model id; list once to avoid duplicate key
 export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
   [MODELS.FLASH_PREVIEW]: 'gemini',
-  [MODELS.FLASH]: 'gemini',
   [MODELS.FLASH_OLD]: 'gemini',
   [MODELS.PRO]: 'gemini',
   // OpenAI-compatible models (uncomment or add when using):
