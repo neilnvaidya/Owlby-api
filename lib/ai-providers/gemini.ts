@@ -1,5 +1,5 @@
-import { ai } from '../ai-config';
-import type { AIAdapterResult, NormalizedUsage } from './types';
+import { ai, buildAIConfig } from '../ai-config';
+import type { AIAdapterResult, AIHelper, NormalizedUsage, UnifiedRequestParams } from './types';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -60,3 +60,23 @@ export async function executeGemini(
     usageMetadata,
   };
 }
+
+/**
+ * Unified entry: build Gemini config from params and execute.
+ * Used by executeRequest() when the model is a Gemini model.
+ */
+export async function executeGeminiRequest(
+  modelId: string,
+  params: UnifiedRequestParams
+): Promise<AIAdapterResult> {
+  const config = buildAIConfig(
+    modelId,
+    params.responseSchema,
+    params.systemInstruction,
+    params.maxOutputTokens,
+    params.temperature
+  );
+  return executeGemini(modelId, config, params.contents, params.timeoutMs);
+}
+
+export const geminiHelper: AIHelper = { execute: executeGeminiRequest };

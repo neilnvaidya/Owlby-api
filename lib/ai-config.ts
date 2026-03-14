@@ -20,15 +20,20 @@ export const ai = new GoogleGenAI({
 /**
  * Supported Gemini Models
  */
-export const MODELS = {
+export const GEMINI_MODELS = {
   FLASH_PREVIEW: 'gemini-3-flash-preview',
   FLASH: 'gemini-3-flash-preview',
   FLASH_OLD: 'gemini-2.5-flash',
   PRO: 'gemini-2.5-pro',
 } as const;
 
+/** @deprecated Use GEMINI_MODELS. Kept for backward compatibility with chat/lesson instructions. */
+export const MODELS = GEMINI_MODELS;
+
 /** DeepSeek (OpenAI-compatible); requires OPENAI_API_KEY + OPENAI_BASE_URL (e.g. https://api.deepseek.com) */
 export const DEEPSEEK_CHAT = 'deepseek-chat';
+export const DEEPSEEK_REASONER = 'deepseek-reasoner';
+
 
 /**
  * Model id -> provider. All Gemini model ids use 'gemini'.
@@ -37,10 +42,11 @@ export const DEEPSEEK_CHAT = 'deepseek-chat';
  */
 // FLASH and FLASH_PREVIEW are the same model id; list once to avoid duplicate key
 export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
-  [MODELS.FLASH_PREVIEW]: 'gemini',
-  [MODELS.FLASH_OLD]: 'gemini',
-  [MODELS.PRO]: 'gemini',
+  [GEMINI_MODELS.FLASH_PREVIEW]: 'gemini',
+  [GEMINI_MODELS.FLASH_OLD]: 'gemini',
+  [GEMINI_MODELS.PRO]: 'gemini',
   [DEEPSEEK_CHAT]: 'openai',
+  [DEEPSEEK_REASONER]: 'openai',
 };
 
 /**
@@ -55,18 +61,18 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
 }> = {
   chat: {
     primary: DEEPSEEK_CHAT,
-    fallback1: MODELS.FLASH_OLD,
-    fallback2: MODELS.PRO,
+    fallback1: GEMINI_MODELS.FLASH_OLD,
+    fallback2: GEMINI_MODELS.PRO,
   },
   lesson: {
-    primary: MODELS.FLASH_PREVIEW,
-    fallback1: MODELS.FLASH,
-    fallback2: MODELS.PRO,
+    primary: DEEPSEEK_REASONER,
+    fallback1: GEMINI_MODELS.FLASH,
+    fallback2: GEMINI_MODELS.PRO,
   },
   story: {
-    primary: MODELS.FLASH_PREVIEW,
-    fallback1: MODELS.FLASH,
-    fallback2: MODELS.PRO,
+    primary: DEEPSEEK_REASONER,
+    fallback1: GEMINI_MODELS.FLASH,
+    fallback2: GEMINI_MODELS.PRO,
   },
 };
 
@@ -155,15 +161,52 @@ export function buildFlashConfig(
 }
 
 /**
- * Route-specific temperature settings
- * Chat uses lower temperature (0.75) for more consistent factual responses
- * Lesson and Story use default (0.9) for more creative/engaging content
+ * Route-specific temperature (fallback when no model/route-specific value).
  */
 export const ROUTE_TEMPERATURES: Record<string, number> = {
   chat: 0.75,
   lesson: 0.9,
   story: 0.9,
 };
+
+/**
+ * Per-model temperature when the same for all routes (e.g. Gemini: use 1.0 everywhere).
+ */
+export const MODEL_TEMPERATURES: Record<string, number> = {
+  [GEMINI_MODELS.FLASH_PREVIEW]: 1.0,
+  [GEMINI_MODELS.FLASH_OLD]: 1.0,
+  [GEMINI_MODELS.PRO]: 1.0,
+};
+
+/**
+ * Per-model, per-route temperature (overrides MODEL_TEMPERATURES when present).
+ * DeepSeek guidance: Coding/Math 0, Data 1.0, General Conversation 1.3, Translation 1.3, Creative 1.5.
+ * We map: chat = General (1.3), lesson = Data/factual (1.0), story = Creative (1.5).
+ */
+export const MODEL_ROUTE_TEMPERATURES: Record<string, Record<string, number>> = {
+  [DEEPSEEK_CHAT]: {
+    chat: 1.3,   // General Conversation
+    lesson: 1.0, // Data / factual
+    story: 1.5,  // Creative Writing
+  },
+  [DEEPSEEK_REASONER]: {
+    chat: 1.3,
+    lesson: 1.0,
+    story: 1.5,
+  },
+};
+
+/**
+ * Temperature for (model, route). Lookup order: per-model-per-route, then per-model, then per-route, then 0.9.
+ */
+export function getTemperatureForModel(modelId: string, route?: string): number {
+  const byRoute = route && MODEL_ROUTE_TEMPERATURES[modelId]?.[route];
+  if (byRoute !== undefined) return byRoute;
+  const byModel = MODEL_TEMPERATURES[modelId];
+  if (byModel !== undefined) return byModel;
+  const byRouteOnly = route ? ROUTE_TEMPERATURES[route] : undefined;
+  return byRouteOnly ?? 0.9;
+}
 
 /**
  * Build AI configuration for Gemini 3 Flash Preview
@@ -235,13 +278,13 @@ export function buildAIConfig(
   // Gemini 3 models always use temperature 1.0
   const finalTemperature = isGemini3Model(modelName) ? 1.0 : (temperature ?? 0.9);
   
-  if (modelName === MODELS.FLASH_PREVIEW) {
+  if (modelName === GEMINI_MODELS.FLASH_PREVIEW) {
     return buildFlashPreviewConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
-  } else if (modelName === MODELS.FLASH) {
+  } else if (modelName === GEMINI_MODELS.FLASH) {
     return buildFlash3Config(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
-  } else if (modelName === MODELS.PRO) {
+  } else if (modelName === GEMINI_MODELS.PRO) {
     return buildProConfig(responseSchema, systemInstruction, maxOutputTokens, 1500, finalTemperature);
-  } else if (modelName === MODELS.FLASH_OLD) {
+  } else if (modelName === GEMINI_MODELS.FLASH_OLD) {
     return buildFlashConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else {
     // Default to Flash config for unknown models

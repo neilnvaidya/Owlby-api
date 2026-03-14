@@ -1,5 +1,5 @@
 import { geminiSchemaToJsonSchema } from './schema-convert';
-import type { AIAdapterResult, NormalizedUsage } from './types';
+import type { AIAdapterResult, AIHelper, NormalizedUsage, UnifiedRequestParams } from './types';
 
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -120,3 +120,24 @@ export async function executeOpenAI(
     usageMetadata,
   };
 }
+
+/**
+ * Unified entry: map UnifiedRequestParams to executeOpenAI.
+ * Used by executeRequest() when the model is an OpenAI-compatible model.
+ */
+export async function executeOpenAIRequest(
+  modelId: string,
+  params: UnifiedRequestParams
+): Promise<AIAdapterResult> {
+  return executeOpenAI(
+    modelId,
+    params.systemInstruction,
+    params.contents,
+    params.responseSchema,
+    params.maxOutputTokens,
+    params.temperature,
+    params.timeoutMs
+  );
+}
+
+export const openaiHelper: AIHelper = { execute: executeOpenAIRequest };

@@ -1,5 +1,9 @@
 import { MODEL_PROVIDER } from '../ai-config';
-import type { AIProvider } from './types';
+import { geminiHelper } from './gemini';
+import { openaiHelper } from './openai';
+import type { AIHelper, AIProvider } from './types';
+
+export type { AIHelper } from './types';
 
 /**
  * Resolve which provider to use for a given model id.
@@ -18,4 +22,12 @@ export function getProviderForModel(modelId: string): AIProvider {
   }
 
   return 'gemini';
+}
+
+/**
+ * Return the correct helper for the given model id.
+ * Used by executeRequest() to pull the right adapter.
+ */
+export function getHelper(modelId: string): AIHelper {
+  return getProviderForModel(modelId) === 'openai' ? openaiHelper : geminiHelper;
 }

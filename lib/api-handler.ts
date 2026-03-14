@@ -1,8 +1,6 @@
-import { CORS_HEADERS, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, ROUTE_TEMPERATURES } from './ai-config';
+import { CORS_HEADERS, ROUTE_MODEL_CONFIG, logTokenUsage, getTemperatureForModel } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
-import { executeGemini } from './ai-providers/gemini';
-import { executeOpenAI } from './ai-providers/openai';
-import { getProviderForModel } from './ai-providers/resolve';
+import { executeRequest } from './ai-providers';
 
 /**
  * Standard API Handler Utilities for Owlby
@@ -85,37 +83,16 @@ function shouldFallback(error: any): boolean {
 
 /**
  * Attempt a single AI request with a specific model.
- * Resolves provider (gemini vs openai) and calls the appropriate adapter.
+ * Uses executeRequest (pulls correct helper by model id) and logs usage.
  */
 async function attemptAIRequest(
   modelName: string,
-  config: any,
-  contents: any[],
+  params: { systemInstruction: string; contents: any[]; responseSchema: any; maxOutputTokens: number; temperature: number; timeoutMs: number },
   endpoint: string,
-  inputText: string,
-  timeoutMs: number,
-  systemInstruction: string,
-  responseSchema: any,
-  maxOutputTokens: number,
-  temperature: number
+  inputText: string
 ): Promise<{ responseText: string; usageMetadata: any }> {
   const attemptStart = Date.now();
-  const provider = getProviderForModel(modelName);
-
-  let result: { responseText: string; usageMetadata: any };
-  if (provider === 'gemini') {
-    result = await executeGemini(modelName, config, contents, timeoutMs);
-  } else {
-    result = await executeOpenAI(
-      modelName,
-      systemInstruction,
-      contents,
-      responseSchema,
-      maxOutputTokens,
-      temperature,
-      timeoutMs
-    );
-  }
+  const result = await executeRequest(modelName, params);
 
   logTokenUsage(endpoint, inputText, result.responseText, result.usageMetadata);
 
@@ -123,9 +100,8 @@ async function attemptAIRequest(
   if (ENABLE_TIMING_LOGS) {
     console.info(`[${endpoint}] AI attempt`, {
       model: modelName,
-      provider,
       durationMs,
-      timeoutMs,
+      timeoutMs: params.timeoutMs,
     });
   }
 
@@ -159,9 +135,6 @@ export async function processAIRequest(
   let fallbackUsed = false;
   const startTime = Date.now();
 
-  // Get route-specific temperature (defaults to 0.9 if not specified)
-  const temperature = ROUTE_TEMPERATURES[endpoint] ?? 0.9;
-
   // Attempt primary model (configurable retry count)
   const primaryAttempts = Math.max(1, DEFAULT_AI_PRIMARY_ATTEMPTS);
   for (let attempt = 1; attempt <= primaryAttempts; attempt++) {
@@ -172,19 +145,16 @@ export async function processAIRequest(
         throw new Error('AI_TOTAL_TIMEOUT');
       }
       const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
-      const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(
-        primary,
-        config,
-        contents,
-        endpoint,
-        inputText,
-        timeoutMs,
+      const temperature = getTemperatureForModel(primary, endpoint);
+      const params = {
         systemInstruction,
+        contents,
         responseSchema,
         maxOutputTokens,
-        temperature
-      );
+        temperature,
+        timeoutMs,
+      };
+      const result = await attemptAIRequest(primary, params, endpoint, inputText);
       
       return {
         ...result,
@@ -217,7 +187,6 @@ export async function processAIRequest(
   }
 
   if (fallback1 && fallback1 !== primary) {
-    // Fallback to first fallback model (gemini-3-flash)
     try {
       const elapsedMs = Date.now() - startTime;
       const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
@@ -225,19 +194,16 @@ export async function processAIRequest(
         throw new Error('AI_TOTAL_TIMEOUT');
       }
       const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
-      const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(
-        fallback1,
-        config,
-        contents,
-        endpoint,
-        inputText,
-        timeoutMs,
+      const temperature = getTemperatureForModel(fallback1, endpoint);
+      const params = {
         systemInstruction,
+        contents,
         responseSchema,
         maxOutputTokens,
-        temperature
-      );
+        temperature,
+        timeoutMs,
+      };
+      const result = await attemptAIRequest(fallback1, params, endpoint, inputText);
       
       console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
       return {
@@ -251,7 +217,6 @@ export async function processAIRequest(
     }
   }
 
-  // Fallback to second fallback model (gemini-2.5-pro)
   try {
     if (fallback2 === primary || fallback2 === fallback1) {
       throw lastError || new Error('AI_PROCESSING_FAILED: duplicate fallback model');
@@ -262,19 +227,16 @@ export async function processAIRequest(
       throw new Error('AI_TOTAL_TIMEOUT');
     }
     const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
-    const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(
-      fallback2,
-      config,
-      contents,
-      endpoint,
-      inputText,
-      timeoutMs,
+    const temperature = getTemperatureForModel(fallback2, endpoint);
+    const params = {
       systemInstruction,
+      contents,
       responseSchema,
       maxOutputTokens,
-      temperature
-    );
+      temperature,
+      timeoutMs,
+    };
+    const result = await attemptAIRequest(fallback2, params, endpoint, inputText);
     
     console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
     return {
