@@ -341,7 +341,7 @@ export default async function handler(req: any, res: any) {
       });
       void flushApiLogger();
 
-      incrementDailyUsage(userId, 'chat');
+      await incrementDailyUsage(userId, 'chat');
     } catch (aiError: any) {
       wasSuccessful = false;
       logChatCall({

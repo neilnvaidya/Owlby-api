@@ -219,8 +219,8 @@ export default async function handler(req: any, res: any) {
       model: modelUsed,
     });
     void flushApiLogger();
-    
-    incrementDailyUsage(userId, 'lesson');
+
+    await incrementDailyUsage(userId, 'lesson');
 
     return res.status(200).json({
       ...processedResponse,

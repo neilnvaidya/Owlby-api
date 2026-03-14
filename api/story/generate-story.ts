@@ -211,8 +211,8 @@ export default async function handler(req: any, res: any) {
       model: modelUsed,
     });
     void flushApiLogger();
-    
-    incrementDailyUsage(userId, 'story');
+
+    await incrementDailyUsage(userId, 'story');
 
     return res.status(200).json({
       ...processedResponse,

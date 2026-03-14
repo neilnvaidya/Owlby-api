@@ -74,6 +74,11 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
     fallback1: GEMINI_MODELS.FLASH,
     fallback2: GEMINI_MODELS.PRO,
   },
+  tags: {
+    primary: GEMINI_MODELS.FLASH_OLD,
+    fallback1: GEMINI_MODELS.FLASH,
+    fallback2: GEMINI_MODELS.PRO,
+  },
 };
 
 /**

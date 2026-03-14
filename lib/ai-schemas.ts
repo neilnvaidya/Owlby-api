@@ -29,6 +29,27 @@ const ACHIEVEMENT_TAGS_SCHEMA = {
 };
 
 /**
+ * Tags-only response schema for the dedicated tags API
+ * Used when generating only requiredCategoryTags and optionalTags from context
+ */
+export const tagsResponseSchema = {
+  type: Type.OBJECT,
+  required: ['requiredCategoryTags', 'optionalTags'],
+  properties: {
+    requiredCategoryTags: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any },
+      description: 'Exactly 1 topic category from the enum',
+    },
+    optionalTags: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '0–5 context tags (people, places, concepts). No PII.',
+    },
+  },
+} as const;
+
+/**
  * Chat response schema for conversational AI interactions
  */
 export const chatResponseSchema = {

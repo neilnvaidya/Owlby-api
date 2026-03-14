@@ -2,29 +2,40 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase =
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey)
+    : null;
 
 type Route = 'chat' | 'lesson' | 'story';
 
 /**
- * Fire-and-forget increment of the daily usage counter for the given route.
+ * Increment the daily usage counter for the given route.
  * Uses the `increment_daily_usage` RPC (atomic upsert, no race conditions).
+ * Must be awaited so the request runs before the serverless runtime freezes
+ * (fire-and-forget caused "fetch failed" after response was sent).
  */
-export function incrementDailyUsage(userId: string, route: Route): void {
+export async function incrementDailyUsage(userId: string, route: Route): Promise<void> {
+  if (!supabase) {
+    if (!supabaseUrl || !supabaseKey) {
+      console.warn('[USAGE] Supabase URL or service role key missing; skipping daily usage increment');
+    }
+    return;
+  }
+
   const today = new Date().toISOString().slice(0, 10);
 
-  (supabase
-    .rpc('increment_daily_usage', {
+  try {
+    const { error } = (await supabase.rpc('increment_daily_usage', {
       p_user_id: userId,
       p_date: today,
       p_route: route,
-    }) as unknown as Promise<{ error: { message?: string } | null }>)
-    .then(({ error }) => {
-      if (error) {
-        console.error('[USAGE] Failed to increment daily usage:', error.message);
-      }
-    })
-    .catch((err) => {
-      console.error('[USAGE] Unexpected error incrementing daily usage:', err);
-    });
+    })) as { error: { message?: string } | null };
+
+    if (error) {
+      console.error('[USAGE] Failed to increment daily usage:', error.message);
+    }
+  } catch (err: any) {
+    console.error('[USAGE] Unexpected error incrementing daily usage:', err?.message ?? err, err?.cause ?? '');
+  }
 }

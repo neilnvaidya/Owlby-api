@@ -56,6 +56,27 @@ TAGS OUTPUT RULES:
 - optionalTags (REQUIRED): 3–10 detailed context tags as free-form strings (e.g., specific people, places, concepts mentioned). These carry context to lesson/story routes. Do NOT include PII.`;
 
 // ============================================================================
+// TAGS-ONLY ROUTE (dedicated tags API)
+// ============================================================================
+
+/**
+ * Generate instructions for the tags-only endpoint.
+ * Takes any context text (from chat, lesson, or story) and asks for tags only.
+ */
+export function getTagsInstructions(context: string, source?: 'chat' | 'lesson' | 'story'): string {
+  const sourceLine = source ? ` Source: ${source}.` : '';
+  return `From the following context, output tags only.${sourceLine}
+
+requiredCategoryTags: Exactly 1 value from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]. Pick the best-matching TOPIC. No usage/behavior categories.
+optionalTags: 0–5 short free-form strings (concepts, places, terms). No PII.
+
+CONTEXT:
+${context}
+
+Return valid JSON only: {"requiredCategoryTags":["ONE_TAG"],"optionalTags":["tag1","tag2"]}`;
+}
+
+// ============================================================================
 // CHAT ROUTE INSTRUCTIONS
 // ============================================================================
 
