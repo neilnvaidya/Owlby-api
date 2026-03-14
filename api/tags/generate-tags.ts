@@ -11,22 +11,51 @@ import { checkRateLimit } from '../../lib/rate-limit';
 const MAX_CONTEXT_LENGTH = 2000;
 const TAGS_MAX_OUTPUT_TOKENS = 256;
 
+/**
+ * Extract a JSON object from model output that may include a preamble (e.g. "Here is the JSON: {...}").
+ */
+function extractJsonObject(text: string): string | null {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf('{');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < trimmed.length; i++) {
+    if (trimmed[i] === '{') depth++;
+    else if (trimmed[i] === '}') {
+      depth--;
+      if (depth === 0) return trimmed.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function processTagsResponse(responseText: string): {
   requiredCategoryTags: string[];
   optionalTags: string[];
 } {
+  let json: any = null;
   try {
-    const json = JSON.parse(responseText);
-    const data = {
-      requiredCategoryTags: Array.isArray(json.requiredCategoryTags) ? json.requiredCategoryTags : [],
-      optionalTags: Array.isArray(json.optionalTags) ? json.optionalTags : [],
-    };
-    normalizeAchievementTags(data);
-    return data;
-  } catch (e) {
-    console.warn('[TAGS API] Failed to parse response, using defaults:', e);
+    json = JSON.parse(responseText);
+  } catch {
+    const extracted = extractJsonObject(responseText);
+    if (extracted) {
+      try {
+        json = JSON.parse(extracted);
+      } catch (e2) {
+        console.warn('[TAGS API] Failed to parse extracted JSON:', e2);
+      }
+    }
+  }
+  if (!json || typeof json !== 'object') {
+    console.warn('[TAGS API] No valid JSON in response, using defaults. Raw start:', responseText.slice(0, 80));
     return { requiredCategoryTags: [], optionalTags: [] };
   }
+  const data = {
+    requiredCategoryTags: Array.isArray(json.requiredCategoryTags) ? json.requiredCategoryTags : [],
+    optionalTags: Array.isArray(json.optionalTags) ? json.optionalTags : [],
+  };
+  normalizeAchievementTags(data);
+  return data;
 }
 
 export default async function handler(req: any, res: any) {

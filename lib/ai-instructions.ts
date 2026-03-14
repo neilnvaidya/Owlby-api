@@ -73,7 +73,7 @@ optionalTags: 0–5 short free-form strings (concepts, places, terms). No PII.
 CONTEXT:
 ${context}
 
-Return valid JSON only: {"requiredCategoryTags":["ONE_TAG"],"optionalTags":["tag1","tag2"]}`;
+CRITICAL: Output ONLY a single JSON object. No preamble, no "Here is...", no explanation, no markdown. The response must start with { and end with }. Example: {"requiredCategoryTags":["ONE_TAG"],"optionalTags":["tag1","tag2"]}`;
 }
 
 // ============================================================================
