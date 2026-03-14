@@ -22,12 +22,13 @@
     "@google/genai": "^1.4.0",
     "@supabase/supabase-js": "^2.49.8",
     "@types/jsonwebtoken": "^9.0.9",
-    "@vercel/node": "^3.0.0",
+    "@vercel/node": "^4.0.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.2.0",
-    "next": "^14.2.10"
+    "next": "^16.1.6",
+    "openai": "^6.29.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -37,6 +38,6 @@
     "ts-jest": "^29.3.2"
   },
   "engines": {
-    "node": ">=20 <23"
+    "node": ">=20"
   }
 }

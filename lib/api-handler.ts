@@ -1,5 +1,8 @@
-import { CORS_HEADERS, ai, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, MODELS, ROUTE_TEMPERATURES } from './ai-config';
+import { CORS_HEADERS, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, ROUTE_TEMPERATURES } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
+import { executeGemini } from './ai-providers/gemini';
+import { executeOpenAI } from './ai-providers/openai';
+import { getProviderForModel } from './ai-providers/resolve';
 
 /**
  * Standard API Handler Utilities for Owlby
@@ -81,7 +84,8 @@ function shouldFallback(error: any): boolean {
 }
 
 /**
- * Attempt a single AI request with a specific model
+ * Attempt a single AI request with a specific model.
+ * Resolves provider (gemini vs openai) and calls the appropriate adapter.
  */
 async function attemptAIRequest(
   modelName: string,
@@ -89,46 +93,43 @@ async function attemptAIRequest(
   contents: any[],
   endpoint: string,
   inputText: string,
-  timeoutMs: number
+  timeoutMs: number,
+  systemInstruction: string,
+  responseSchema: any,
+  maxOutputTokens: number,
+  temperature: number
 ): Promise<{ responseText: string; usageMetadata: any }> {
   const attemptStart = Date.now();
-  const response = await withTimeout(
-    ai.models.generateContent({
-      model: modelName,
-      config,
+  const provider = getProviderForModel(modelName);
+
+  let result: { responseText: string; usageMetadata: any };
+  if (provider === 'gemini') {
+    result = await executeGemini(modelName, config, contents, timeoutMs);
+  } else {
+    result = await executeOpenAI(
+      modelName,
+      systemInstruction,
       contents,
-    }),
-    timeoutMs,
-    'AI_REQUEST_TIMEOUT'
-  );
-
-  const responseText = response.text || (
-    Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
-      ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
-      : ''
-  );
-
-  if (!responseText) {
-    console.warn(`[${endpoint}] ${modelName} returned empty text`);
-    throw new Error('Empty response from AI service');
+      responseSchema,
+      maxOutputTokens,
+      temperature,
+      timeoutMs
+    );
   }
 
-  // Log token usage for cost analysis (only in development)
-  logTokenUsage(endpoint, inputText, responseText, response.usageMetadata);
+  logTokenUsage(endpoint, inputText, result.responseText, result.usageMetadata);
 
   const durationMs = Date.now() - attemptStart;
   if (ENABLE_TIMING_LOGS) {
     console.info(`[${endpoint}] AI attempt`, {
       model: modelName,
+      provider,
       durationMs,
       timeoutMs,
     });
   }
 
-  return {
-    responseText,
-    usageMetadata: response.usageMetadata
-  };
+  return result;
 }
 
 /**
@@ -172,7 +173,18 @@ export async function processAIRequest(
       }
       const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(primary, config, contents, endpoint, inputText, timeoutMs);
+      const result = await attemptAIRequest(
+        primary,
+        config,
+        contents,
+        endpoint,
+        inputText,
+        timeoutMs,
+        systemInstruction,
+        responseSchema,
+        maxOutputTokens,
+        temperature
+      );
       
       return {
         ...result,
@@ -214,7 +226,18 @@ export async function processAIRequest(
       }
       const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
-      const result = await attemptAIRequest(fallback1, config, contents, endpoint, inputText, timeoutMs);
+      const result = await attemptAIRequest(
+        fallback1,
+        config,
+        contents,
+        endpoint,
+        inputText,
+        timeoutMs,
+        systemInstruction,
+        responseSchema,
+        maxOutputTokens,
+        temperature
+      );
       
       console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
       return {
@@ -240,7 +263,18 @@ export async function processAIRequest(
     }
     const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
     const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
-    const result = await attemptAIRequest(fallback2, config, contents, endpoint, inputText, timeoutMs);
+    const result = await attemptAIRequest(
+      fallback2,
+      config,
+      contents,
+      endpoint,
+      inputText,
+      timeoutMs,
+      systemInstruction,
+      responseSchema,
+      maxOutputTokens,
+      temperature
+    );
     
     console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
     return {

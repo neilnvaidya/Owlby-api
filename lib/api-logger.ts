@@ -77,13 +77,17 @@ class APILoggingService {
     startTime: new Date()
   };
 
-  // Gemini pricing per 1M tokens (update as needed)
-  // Note: Thinking tokens are charged at the same rate as input tokens
+  // Pricing per 1M tokens (Gemini + OpenAI-compatible models)
+  // Note: Thinking tokens (Gemini) are charged at the same rate as input tokens
   private readonly PRICING = {
-    'gemini-3-flash-preview': { input: 0.50, output: 3.00, thinking: 3.00}, // Preview model, similar to Flash pricing
-    'gemini-3-flash': { input: 0.5, output: 3.00, thinking: 3.00 }, // Flash has no thinking, but set for consistency
-    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 2.50}, // Flash has no thinking, but set for consistency
-    'gemini-2.5-pro': { input: 1.25, output: 10.00, thinking: 10.0 }, // Thinking charged at input rate
+    'gemini-3-flash-preview': { input: 0.50, output: 3.00, thinking: 3.00 },
+    'gemini-3-flash': { input: 0.5, output: 3.00, thinking: 3.00 },
+    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 2.50 },
+    'gemini-2.5-pro': { input: 1.25, output: 10.00, thinking: 10.0 },
+    // OpenAI-compatible (fallback when model not in PRICING uses gemini-3-flash-preview)
+    'gpt-4o-mini': { input: 0.15, output: 0.60, thinking: 0.15 },
+    'gpt-4o': { input: 2.50, output: 10.00, thinking: 2.50 },
+    'deepseek-chat': { input: 0.14, output: 0.28, thinking: 0.14 },
   };
   
   constructor() {
