@@ -65,7 +65,7 @@ TAGS OUTPUT RULES:
  */
 export function getTagsInstructions(context: string, source?: 'chat' | 'lesson' | 'story'): string {
   const sourceLine = source ? ` Source: ${source}.` : '';
-  return `From the following context, output tags only.${sourceLine}
+  return `You must respond with valid json only. From the following context, output tags in JSON format.${sourceLine}
 
 requiredCategoryTags: Exactly 1 value from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]. Pick the best-matching TOPIC. No usage/behavior categories.
 optionalTags: 0–5 short free-form strings (concepts, places, terms). No PII.
@@ -73,7 +73,10 @@ optionalTags: 0–5 short free-form strings (concepts, places, terms). No PII.
 CONTEXT:
 ${context}
 
-CRITICAL: Output ONLY a single JSON object. No preamble, no "Here is...", no explanation, no markdown. The response must start with { and end with }. Example: {"requiredCategoryTags":["ONE_TAG"],"optionalTags":["tag1","tag2"]}`;
+EXAMPLE JSON OUTPUT:
+{"requiredCategoryTags":["ANIMALS_NATURE"],"optionalTags":["habitat","species","conservation"]}
+
+Respond with valid json only. No preamble, no markdown, no code fence. Start with { and end with }.`;
 }
 
 // ============================================================================

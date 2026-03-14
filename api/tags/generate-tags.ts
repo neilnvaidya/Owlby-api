@@ -12,18 +12,28 @@ const MAX_CONTEXT_LENGTH = 2000;
 const TAGS_MAX_OUTPUT_TOKENS = 256;
 
 /**
- * Extract a JSON object from model output that may include a preamble (e.g. "Here is the JSON: {...}").
+ * Strip markdown code fence (e.g. ```json ... ```) so we can parse the inner JSON.
+ */
+function stripMarkdownCodeFence(text: string): string {
+  const trimmed = text.trim();
+  const codeBlockMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (codeBlockMatch) return codeBlockMatch[1].trim();
+  return trimmed;
+}
+
+/**
+ * Extract a JSON object from model output that may include a preamble or markdown (e.g. "Here is the JSON:\n```json\n{...}\n```").
  */
 function extractJsonObject(text: string): string | null {
-  const trimmed = text.trim();
-  const start = trimmed.indexOf('{');
+  const stripped = stripMarkdownCodeFence(text);
+  const start = stripped.indexOf('{');
   if (start === -1) return null;
   let depth = 0;
-  for (let i = start; i < trimmed.length; i++) {
-    if (trimmed[i] === '{') depth++;
-    else if (trimmed[i] === '}') {
+  for (let i = start; i < stripped.length; i++) {
+    if (stripped[i] === '{') depth++;
+    else if (stripped[i] === '}') {
       depth--;
-      if (depth === 0) return trimmed.slice(start, i + 1);
+      if (depth === 0) return stripped.slice(start, i + 1);
     }
   }
   return null;
@@ -34,8 +44,9 @@ function processTagsResponse(responseText: string): {
   optionalTags: string[];
 } {
   let json: any = null;
+  const toParse = stripMarkdownCodeFence(responseText);
   try {
-    json = JSON.parse(responseText);
+    json = JSON.parse(toParse);
   } catch {
     const extracted = extractJsonObject(responseText);
     if (extracted) {
