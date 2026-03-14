@@ -27,9 +27,12 @@ export const MODELS = {
   PRO: 'gemini-2.5-pro',
 } as const;
 
+/** DeepSeek (OpenAI-compatible); requires OPENAI_API_KEY + OPENAI_BASE_URL (e.g. https://api.deepseek.com) */
+export const DEEPSEEK_CHAT = 'deepseek-chat';
+
 /**
  * Model id -> provider. All Gemini model ids use 'gemini'.
- * Add OpenAI-compatible model ids (e.g. gpt-4o-mini, deepseek-chat) with 'openai'.
+ * Models listed as 'openai' use OPENAI_API_KEY and OPENAI_BASE_URL (e.g. DeepSeek).
  * Unknown models default to 'gemini' in getProviderForModel().
  */
 // FLASH and FLASH_PREVIEW are the same model id; list once to avoid duplicate key
@@ -37,10 +40,7 @@ export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
   [MODELS.FLASH_PREVIEW]: 'gemini',
   [MODELS.FLASH_OLD]: 'gemini',
   [MODELS.PRO]: 'gemini',
-  // OpenAI-compatible models (uncomment or add when using):
-  // 'gpt-4o-mini': 'openai',
-  // 'gpt-4o': 'openai',
-  // 'deepseek-chat': 'openai',
+  [DEEPSEEK_CHAT]: 'openai',
 };
 
 /**
@@ -54,9 +54,9 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
   fallback2: string;
 }> = {
   chat: {
-    primary: MODELS.FLASH_OLD,
-    fallback1: MODELS.PRO,
-    fallback2: MODELS.FLASH_PREVIEW,
+    primary: DEEPSEEK_CHAT,
+    fallback1: MODELS.FLASH_OLD,
+    fallback2: MODELS.PRO,
   },
   lesson: {
     primary: MODELS.FLASH_PREVIEW,
