@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY!
 );
 
-const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 8000);
+const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 15000);
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -256,17 +256,32 @@ class APILoggingService {
     const batch = [...this.buffer];
     this.buffer = [];
 
-    try {
-      const insertPromise = supabase.from('api_usage_logs').insert(batch);
-      const { error, data } = await withTimeout(
-        insertPromise as unknown as Promise<any>,
+    const doInsert = () =>
+      withTimeout(
+        Promise.resolve(supabase.from('api_usage_logs').insert(batch)),
         LOG_FLUSH_TIMEOUT_MS,
         'API_LOGGER_FLUSH_TIMEOUT'
       );
 
-      if (error) {
-        console.error('[API LOGGER] Supabase insert error:', error, { batch });
-        // Re-add to buffer for retry on next flush
+    const attemptFlush = async (): Promise<{ ok: boolean; error?: any }> => {
+      try {
+        const { error } = await doInsert();
+        if (error) return { ok: false, error };
+        return { ok: true };
+      } catch (err: any) {
+        if (err?.message === 'API_LOGGER_FLUSH_TIMEOUT') return { ok: false, error: err };
+        throw err;
+      }
+    };
+
+    try {
+      let result = await attemptFlush();
+      if (!result.ok && result.error?.message === 'API_LOGGER_FLUSH_TIMEOUT') {
+        // Retry once on timeout (Supabase may be slow)
+        result = await attemptFlush();
+      }
+      if (!result.ok) {
+        console.error('[API LOGGER] Supabase insert error:', result.error, { batch });
         this.buffer.unshift(...batch);
       } else {
         console.info(`📊 Logged ${batch.length} API calls to database`);

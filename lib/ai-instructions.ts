@@ -149,41 +149,29 @@ Return VALID JSON only.`;
 
 /**
  * Generate lesson creation instructions
- * Currently model-agnostic (same for PRO and FLASH)
- * 
- * To make model-specific: Create getLessonInstructionsForPro() and getLessonInstructionsForFlash()
- * and update lesson route handler to select based on model parameter
+ * Kept concise to reduce prompt size and encourage shorter model output (same schema).
  */
 export function getLessonInstructions(topic: string, gradeLevel: number, tags?: string[]): string {
   const ageYears = gradeToAge(gradeLevel);
-  
-  const contextTagsSection = tags && tags.length > 0 
-    ? `\nCONTEXT TAGS:\nThe following tags provide additional context from the original conversation. Use these to enrich the lesson content when relevant:\n${tags.map(tag => `- ${tag}`).join('\n')}\n`
+  const contextLine = tags && tags.length > 0
+    ? `Context tags (use when relevant): ${tags.slice(0, 5).join(', ')}.\n`
     : '';
-  
+
   return `${BASE_OWLBY_INSTRUCTIONS}
 
-Create a lesson about "${topic}" for grade ${gradeLevel} (approximately ${ageYears} years old) in VALID JSON matching the provided schema.${contextTagsSection}
+Create a concise lesson about "${topic}" for grade ${gradeLevel} (${ageYears} years old). Return VALID JSON only. Be brief: short sentences, minimal length.${contextLine}
 
-LESSON STRUCTURE:
-1. title – ≤50 chars, catchy, no quotes
-2. introduction – ONE clear sentence that hooks interest
-3. body – 1–4 short paragraphs, 100-250 characters each, scaling with user profile (array of strings)
-   - Use markdown formatting: **bold** important keywords, scientific terms, or key concepts in each paragraph
-   - Bold terms that are defined in the keywords section or are central to understanding the topic
-   - Keep bolding natural and educational - typically 1-3 bolded terms per paragraph
-4. conclusion – single wrap-up sentence
-5. keyPoints – 2–5 bullet strings
-6. keywords – 4–7 {term, definition} items, choose harder words for older/difficult lessons
-7. difficulty – integer 0-20 (0=kindergarten, 20=8th-grade); pick realistically for content depth
-8. challengeQuiz – 3–8 MCQs; ALWAYS 4 options; answers in lesson; with explanations.
+STRUCTURE (keep each item short):
+1. title – ≤50 chars, catchy
+2. introduction – one sentence
+3. body – 2–3 short paragraphs, 80–150 characters each; **bold** key terms (1–2 per paragraph)
+4. conclusion – one sentence
+5. keyPoints – 2–3 bullets
+6. keywords – 3–5 {term, definition}
+7. difficulty – 0–20
+8. challengeQuiz – 3–5 MCQs, 4 options each, short explanations
 
 ${TAG_OUTPUT_RULES}
-
-AGE ADAPTATION:
-- For younger students (grades 1-2): Simple vocabulary, shorter paragraphs, basic concepts
-- For middle students (grades 3-4): Moderate vocabulary, engaging examples, clear explanations
-- For older students (grades 5-6): Advanced vocabulary, detailed explanations, complex concepts
 
 Return ONLY the JSON.`;
 }
@@ -194,39 +182,26 @@ Return ONLY the JSON.`;
 
 /**
  * Generate story creation instructions
- * Currently model-agnostic (same for PRO and FLASH)
- * 
- * To make model-specific: Create getStoryInstructionsForPro() and getStoryInstructionsForFlash()
- * and update story route handler to select based on model parameter
+ * Kept concise to reduce prompt size and encourage shorter model output (same schema).
  */
 export function getStoryInstructions(prompt: string, gradeLevel: number, tags?: string[]): string {
   const ageYears = gradeToAge(gradeLevel);
-  
-  const contextTagsSection = tags && tags.length > 0 
-    ? `\nCONTEXT TAGS:\nThe following tags provide additional context from the original conversation. Use these to enrich the story content when relevant:\n${tags.map(tag => `- ${tag}`).join('\n')}\n`
+  const contextLine = tags && tags.length > 0
+    ? `Context tags (use when relevant): ${tags.slice(0, 5).join(', ')}.\n`
     : '';
-  
+
   return `${BASE_OWLBY_INSTRUCTIONS}
 
-Create an engaging story based on the prompt: "${prompt}" for grade ${gradeLevel} (${ageYears} years old).${contextTagsSection}
+Create a short story for prompt: "${prompt}", grade ${gradeLevel} (${ageYears} years old). Return VALID JSON only. Be concise: short paragraphs.${contextLine}
 
-STORY REQUIREMENTS:
-- Age-appropriate for ${ageYears}-year-olds
-- Engaging and imaginative
-- Educational when possible
-- Positive and encouraging
-- Safe and appropriate for children
-
-STORY STRUCTURE:
-- **Title**: Catchy, under 50 characters
-- **Content**: Break story into 4-6 paragraphs, each 2-4 sentences
-- **Characters**: List main characters
-- **Setting**: Describe where/when story happens
-- **Moral**: Optional lesson (keep it light and natural)
+STRUCTURE:
+- title: ≤50 chars
+- content: 3–4 paragraphs, 1–2 sentences each
+- characters: list main characters (short)
+- setting: one short sentence
+- moral: optional, one sentence
 
 ${TAG_OUTPUT_RULES}
 
-Make the story vivid and fun while keeping language appropriate for the grade level.
-
-Return VALID JSON matching the schema.`;
+Return ONLY the JSON.`;
 }

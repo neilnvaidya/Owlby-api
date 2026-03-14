@@ -58,6 +58,12 @@ export default async function handler(req: any, res: any) {
   if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
+  let aiDurationMs = 0;
+  const timing: Record<string, number> = {};
+  const mark = (label: string, from: number) => {
+    timing[label] = Date.now() - from;
+  };
+
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '');
 
@@ -70,8 +76,11 @@ export default async function handler(req: any, res: any) {
   }
 
   let decoded: any;
+  const authStart = Date.now();
   try {
     decoded = await verifySupabaseToken(token);
+    mark('authMs', authStart);
+    (req as any)._authDurationMs = Date.now() - authStart;
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -139,6 +148,10 @@ export default async function handler(req: any, res: any) {
     });
   }
 
+  let modelUsed = 'unknown';
+  let fallbackUsed = false;
+  let wasSuccessful = true;
+
   try {
     // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel, contextTags);
@@ -156,19 +169,43 @@ export default async function handler(req: any, res: any) {
     ];
     
     // Process AI request using centralized handler with retry and fallback
-    const { responseText, usageMetadata, modelUsed, fallbackUsed } = await processAIRequest(
+    const aiStart = Date.now();
+    const { responseText, usageMetadata, modelUsed: usedModel, fallbackUsed: usedFallback } = await processAIRequest(
       lessonResponseSchema,
       systemInstructions,
       contents,
       'lesson',
       topic
     );
+    modelUsed = usedModel;
+    fallbackUsed = usedFallback;
+    aiDurationMs = Date.now() - aiStart;
+    timing.aiMs = aiDurationMs;
     
     // Process the lesson response
     const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
     
     // Normalize achievement tags
     normalizeAchievementTags(processedResponse);
+
+    // Log timing (aligned with chat route)
+    console.info('[LESSON API] Timing summary', {
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      topic,
+      success: true,
+    });
+    console.info('[LESSON API] Timing breakdown', {
+      totalMs: Date.now() - startTime,
+      ...timing,
+      modelUsed,
+      fallbackUsed,
+      success: true,
+    });
 
     // Log successful request
     logLessonCall({
@@ -191,6 +228,27 @@ export default async function handler(req: any, res: any) {
     });
     
   } catch (error: any) {
+    wasSuccessful = false;
+    // Log timing on failure
+    console.info('[LESSON API] Timing summary', {
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      userId,
+      topic: req.body?.topic,
+      success: false,
+      error: error.message,
+    });
+    console.info('[LESSON API] Timing breakdown', {
+      totalMs: Date.now() - startTime,
+      ...timing,
+      modelUsed,
+      fallbackUsed,
+      success: false,
+      error: error.message,
+    });
     // Log failed request
     logLessonCall({
       userId,
@@ -199,7 +257,7 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model: 'unknown',
+      model: modelUsed,
     });
     void flushApiLogger();
 
