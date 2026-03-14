@@ -1,6 +1,7 @@
 {
   "name": "owlby-api",
   "version": "1.0.0",
+  "type": "module",
   "description": "OwlbyAI API - Backend services for privacy-first AI educational platform",
   "main": "index.js",
   "scripts": {

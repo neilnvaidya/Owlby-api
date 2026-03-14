@@ -271,7 +271,7 @@ export default async function handler(req: any, res: any) {
 
     const primaryModel = ROUTE_MODEL_CONFIG.chat?.primary;
     const systemInstructions =
-      primaryModel === MODELS.FLASH_OLD
+      primaryModel === MODELS.FLASH_OLD || primaryModel === MODELS.FLASH
         ? getChatInstructionsForFlash25(gradeLevel, recentContext)
         : getChatInstructions(gradeLevel, recentContext);
 

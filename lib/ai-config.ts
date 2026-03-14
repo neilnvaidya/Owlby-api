@@ -52,7 +52,7 @@ export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
 /**
  * Route-specific model configuration
  * Defines primary and fallback models for each endpoint
- * Fallback chain: preview -> flash -> 2.5-pro
+ * Default: gemini-3-flash-preview for all routes; fallback chain: 2.5-flash -> 2.5-pro
  */
 export const ROUTE_MODEL_CONFIG: Record<string, {
   primary: string;
@@ -60,23 +60,23 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
   fallback2: string;
 }> = {
   chat: {
-    primary: DEEPSEEK_CHAT,
+    primary: GEMINI_MODELS.FLASH,
     fallback1: GEMINI_MODELS.FLASH_OLD,
     fallback2: GEMINI_MODELS.PRO,
   },
   lesson: {
-    primary: DEEPSEEK_REASONER,
-    fallback1: GEMINI_MODELS.FLASH,
+    primary: GEMINI_MODELS.FLASH,
+    fallback1: GEMINI_MODELS.FLASH_OLD,
     fallback2: GEMINI_MODELS.PRO,
   },
   story: {
-    primary: DEEPSEEK_REASONER,
-    fallback1: GEMINI_MODELS.FLASH,
+    primary: GEMINI_MODELS.FLASH,
+    fallback1: GEMINI_MODELS.FLASH_OLD,
     fallback2: GEMINI_MODELS.PRO,
   },
   tags: {
-    primary: GEMINI_MODELS.FLASH_OLD,
-    fallback1: GEMINI_MODELS.FLASH,
+    primary: GEMINI_MODELS.FLASH,
+    fallback1: GEMINI_MODELS.FLASH_OLD,
     fallback2: GEMINI_MODELS.PRO,
   },
 };
