@@ -1,19 +1,17 @@
 # API route consolidation (Vercel free tier ≤12 functions)
 
-**Current:** 10 serverless functions (each `api/**/*.ts` file = 1 function).
+**Current:** 8 serverless functions (after Option 1 + 2 consolidation).
 
 | # | Route file | Purpose |
 |---|------------|--------|
-| 1 | `api/status.ts` | Health (GET, no auth) + subscription status (GET, auth) via `?scope=` |
-| 2 | `api/profile.ts` | GET profile, POST update, DELETE account |
-| 3 | `api/email-verification.ts` | POST send/resend verification email |
-| 4 | `api/verify-email.ts` | GET/POST consume token (email link click) |
-| 5 | `api/story/generate-story.ts` | Story generation |
-| 6 | `api/learn/generate-lesson.ts` | Lesson generation |
-| 7 | `api/chat/generate-response.ts` | Chat response |
-| 8 | `api/feedback/submit.ts` | Feedback submission |
-| 9 | `api/achievements/sync.ts` | Achievements sync |
-| 10 | `api/webhooks/revenuecat.ts` | RevenueCat webhook |
+| 1 | `api/profile.ts` | GET profile, POST update, DELETE account; **+** GET `?scope=health` (no auth), GET `?scope=subscription` (auth) |
+| 2 | `api/email.ts` | POST send/resend verification; GET/POST with token = verify (consume link) |
+| 3 | `api/story/generate-story.ts` | Story generation |
+| 4 | `api/learn/generate-lesson.ts` | Lesson generation |
+| 5 | `api/chat/generate-response.ts` | Chat response |
+| 6 | `api/feedback/submit.ts` | Feedback submission |
+| 7 | `api/achievements/sync.ts` | Achievements sync |
+| 8 | `api/webhooks/revenuecat.ts` | RevenueCat webhook |
 
 Your `vercel.json` rewrites already map many public paths to these; the app calls the rewritten URLs. Consolidating **files** and updating rewrites keeps the same public API, so the app does not need to change.
 

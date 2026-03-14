@@ -2,7 +2,19 @@
   "rewrites": [
     {
       "source": "/health",
-      "destination": "/api/status?scope=health"
+      "destination": "/api/profile?scope=health"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/profile?scope=health"
+    },
+    {
+      "source": "/subscription-status",
+      "destination": "/api/profile?scope=subscription"
+    },
+    {
+      "source": "/api/subscription-status",
+      "destination": "/api/profile?scope=subscription"
     },
     {
       "source": "/achievements/sync",
@@ -10,7 +22,11 @@
     },
     {
       "source": "/verify-email",
-      "destination": "/api/verify-email"
+      "destination": "/api/email"
+    },
+    {
+      "source": "/api/verify-email",
+      "destination": "/api/email"
     },
     {
       "source": "/profile",
@@ -45,18 +61,6 @@
       "destination": "/api/webhooks/revenuecat"
     },
     {
-      "source": "/subscription-status",
-      "destination": "/api/status?scope=subscription"
-    },
-    {
-      "source": "/api/subscription-status",
-      "destination": "/api/status?scope=subscription"
-    },
-    {
-      "source": "/api/health",
-      "destination": "/api/status?scope=health"
-    },
-    {
       "source": "/api/update-profile",
       "destination": "/api/profile?context=onboarding"
     },
@@ -70,11 +74,11 @@
     },
     {
       "source": "/api/send-verification",
-      "destination": "/api/email-verification?action=send"
+      "destination": "/api/email?action=send"
     },
     {
       "source": "/api/resend-verification",
-      "destination": "/api/email-verification?action=resend"
+      "destination": "/api/email?action=resend"
     }
   ]
 }
