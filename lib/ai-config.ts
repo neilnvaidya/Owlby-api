@@ -5,9 +5,10 @@ import {
   HarmCategory,
 } from '@google/genai';
 
+import { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES } from './config';
+
 config();
 
-// AI Configuration Constants
 const API_KEY = process.env.GEMINI_API_KEY;
 if (!API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable is required');
@@ -17,69 +18,8 @@ export const ai = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
-/**
- * Supported Gemini Models
- */
-export const GEMINI_MODELS = {
-  FLASH_PREVIEW: 'gemini-3-flash-preview',
-  FLASH: 'gemini-3-flash-preview',
-  FLASH_OLD: 'gemini-2.5-flash',
-  PRO: 'gemini-2.5-pro',
-} as const;
-
-/** @deprecated Use GEMINI_MODELS. Kept for backward compatibility with chat/lesson instructions. */
-export const MODELS = GEMINI_MODELS;
-
-/** DeepSeek (OpenAI-compatible); requires OPENAI_API_KEY + OPENAI_BASE_URL (e.g. https://api.deepseek.com) */
-export const DEEPSEEK_CHAT = 'deepseek-chat';
-export const DEEPSEEK_REASONER = 'deepseek-reasoner';
-
-
-/**
- * Model id -> provider. All Gemini model ids use 'gemini'.
- * Models listed as 'openai' use OPENAI_API_KEY and OPENAI_BASE_URL (e.g. DeepSeek).
- * Unknown models default to 'gemini' in getProviderForModel().
- */
-// FLASH and FLASH_PREVIEW are the same model id; list once to avoid duplicate key
-export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
-  [GEMINI_MODELS.FLASH_PREVIEW]: 'gemini',
-  [GEMINI_MODELS.FLASH_OLD]: 'gemini',
-  [GEMINI_MODELS.PRO]: 'gemini',
-  [DEEPSEEK_CHAT]: 'openai',
-  [DEEPSEEK_REASONER]: 'openai',
-};
-
-/**
- * Route-specific model configuration
- * Defines primary and fallback models for each endpoint
- * Default: gemini-3-flash-preview for all routes; fallback chain: 2.5-flash -> 2.5-pro
- */
-export const ROUTE_MODEL_CONFIG: Record<string, {
-  primary: string;
-  fallback1: string;
-  fallback2: string;
-}> = {
-  chat: {
-    primary: GEMINI_MODELS.FLASH,
-    fallback1: GEMINI_MODELS.FLASH_OLD,
-    fallback2: GEMINI_MODELS.PRO,
-  },
-  lesson: {
-    primary: GEMINI_MODELS.FLASH,
-    fallback1: GEMINI_MODELS.FLASH_OLD,
-    fallback2: GEMINI_MODELS.PRO,
-  },
-  story: {
-    primary: GEMINI_MODELS.FLASH,
-    fallback1: GEMINI_MODELS.FLASH_OLD,
-    fallback2: GEMINI_MODELS.PRO,
-  },
-  tags: {
-    primary: GEMINI_MODELS.FLASH,
-    fallback1: GEMINI_MODELS.FLASH_OLD,
-    fallback2: GEMINI_MODELS.PRO,
-  },
-};
+/** Re-export from config for callers that import from ai-config */
+export { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES };
 
 /**
  * Standard safety settings for all Owlby AI endpoints
@@ -103,15 +43,6 @@ export const SAFETY_SETTINGS = [
     threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
   },
 ];
-
-/**
- * Standard CORS headers for all API endpoints
- */
-export const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
 
 /**
  * Helper to calculate approximate age from grade level
@@ -163,54 +94,6 @@ export function buildFlashConfig(
     temperature,
     // Note: Flash does not support thinkingConfig
   };
-}
-
-/**
- * Route-specific temperature (fallback when no model/route-specific value).
- */
-export const ROUTE_TEMPERATURES: Record<string, number> = {
-  chat: 0.75,
-  lesson: 0.9,
-  story: 0.9,
-};
-
-/**
- * Per-model temperature when the same for all routes (e.g. Gemini: use 1.0 everywhere).
- */
-export const MODEL_TEMPERATURES: Record<string, number> = {
-  [GEMINI_MODELS.FLASH_PREVIEW]: 1.0,
-  [GEMINI_MODELS.FLASH_OLD]: 1.0,
-  [GEMINI_MODELS.PRO]: 1.0,
-};
-
-/**
- * Per-model, per-route temperature (overrides MODEL_TEMPERATURES when present).
- * DeepSeek guidance: Coding/Math 0, Data 1.0, General Conversation 1.3, Translation 1.3, Creative 1.5.
- * We map: chat = General (1.3), lesson = Data/factual (1.0), story = Creative (1.5).
- */
-export const MODEL_ROUTE_TEMPERATURES: Record<string, Record<string, number>> = {
-  [DEEPSEEK_CHAT]: {
-    chat: 1.3,   // General Conversation
-    lesson: 1.0, // Data / factual
-    story: 1.5,  // Creative Writing
-  },
-  [DEEPSEEK_REASONER]: {
-    chat: 1.3,
-    lesson: 1.0,
-    story: 1.5,
-  },
-};
-
-/**
- * Temperature for (model, route). Lookup order: per-model-per-route, then per-model, then per-route, then 0.9.
- */
-export function getTemperatureForModel(modelId: string, route?: string): number {
-  const byRoute = route && MODEL_ROUTE_TEMPERATURES[modelId]?.[route];
-  if (byRoute !== undefined) return byRoute;
-  const byModel = MODEL_TEMPERATURES[modelId];
-  if (byModel !== undefined) return byModel;
-  const byRouteOnly = route ? ROUTE_TEMPERATURES[route] : undefined;
-  return byRouteOnly ?? 0.9;
 }
 
 /**
