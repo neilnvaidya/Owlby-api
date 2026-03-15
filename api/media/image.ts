@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getImageForTags } from '../../lib/wikimedia-commons.js';
+import { getImagesForTags } from '../../lib/wikimedia-commons.js';
 
 function parseTags(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -44,19 +44,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const result = await getImageForTags(tags, fallbackQuery);
-
-    if ('error' in result) {
-      return res.status(404).json({ error: result.error });
-    }
-
-    return res.status(200).json({
-      imageUrl: result.imageUrl,
-      attributionUrl: result.attributionUrl,
-      matchedQuery: result.matchedQuery,
-      ...(result.width != null && { width: result.width }),
-      ...(result.height != null && { height: result.height }),
-    });
+    const images = await getImagesForTags(tags, fallbackQuery);
+    return res.status(200).json({ images });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch image from Wikimedia Commons';
     console.error('[media/image]', message, err);

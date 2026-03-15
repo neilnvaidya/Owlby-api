@@ -24,8 +24,6 @@ export interface CommonsFileDetails {
 export interface GetImageResult {
   imageUrl: string;
   attributionUrl: string;
-  /** Query that produced this image (e.g. "prism" or "prism simple") */
-  matchedQuery: string;
   width?: number;
   height?: number;
 }
@@ -33,6 +31,22 @@ export interface GetImageResult {
 export interface GetImageError {
   error: string;
 }
+
+/** One image per tag; tag is the search query used. */
+export interface ImageForTag {
+  tag: string;
+  imageUrl: string;
+  attributionUrl: string;
+  width?: number;
+  height?: number;
+}
+
+export interface ImageForTagError {
+  tag: string;
+  error: string;
+}
+
+export type ImageForTagResult = ImageForTag | ImageForTagError;
 
 /**
  * Search Commons for pages matching the query.
@@ -108,14 +122,11 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
 
 const DEFAULT_FALLBACK_QUERY = 'nature';
 
-/** Suffix to prefer simpler, more educational images when available. */
-const SIMPLE_SUFFIX = ' simple';
-
 /**
- * Get one relevant image from Commons for a single search query.
+ * Get one relevant image from Commons for a single search query (tag used directly).
  * Skips non-file and non-bitmap results (e.g. gallery pages, PDFs).
  */
-async function getOneImageForQuery(query: string): Promise<Omit<GetImageResult, 'matchedQuery'> | null> {
+async function getOneImageForQuery(query: string): Promise<GetImageResult | null> {
   const pages = await searchPages(query, 10);
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
 
@@ -134,28 +145,26 @@ async function getOneImageForQuery(query: string): Promise<Omit<GetImageResult, 
 }
 
 /**
- * Get one relevant image from Commons for the given tags (or fallback query).
- * Runs multiple searches: for each tag, tries "<tag> simple" first (for simpler/educational images),
- * then the raw tag; then moves to the next tag. Returns the first successful image and which query matched.
+ * Fetch one image per tag from Commons. Runs all tag searches in parallel (one Wikimedia
+ * request per tag at the same time). Uses each tag directly as the search query.
+ * Returns an array with one result per tag (image or error).
  */
-export async function getImageForTags(
+export async function getImagesForTags(
   tags: string[],
   fallbackQuery?: string
-): Promise<GetImageResult | GetImageError> {
+): Promise<ImageForTagResult[]> {
   const trimmed = tags.filter((t) => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
-  const tagsToTry = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
+  const queries = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
 
-  for (const tag of tagsToTry) {
-    if (!tag) continue;
-    // Prefer simpler/educational image: try "prism simple" before "prism"
-    const queriesForTag = [tag + SIMPLE_SUFFIX, tag];
-    for (const query of queriesForTag) {
-      const result = await getOneImageForQuery(query);
+  const results = await Promise.all(
+    queries.map(async (tag): Promise<ImageForTagResult> => {
+      const result = await getOneImageForQuery(tag);
       if (result) {
-        return { ...result, matchedQuery: query };
+        return { tag, ...result };
       }
-    }
-  }
+      return { tag, error: 'No suitable image found.' };
+    })
+  );
 
-  return { error: 'No suitable image found for the given tags.' };
+  return results;
 }
