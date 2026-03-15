@@ -30,11 +30,11 @@ Fill in columns as you run API route tests; prompts come from `api-route-test-co
 
 ```text
 node scripts/api-route-test.js all
-# Runs: health → chat → lesson → story → tags (prompt set chosen at random).
+# Runs: health → chat → lesson → story (prompt set chosen at random).
 # Results append to api-test-results.jsonl.
 ```
 </details>
 
 ---
 
-*API route tests: `node scripts/api-route-test.js health|chat|lesson|story|tags|all` against api-dev.owlby.com. Set `OWLBY_TEST_TOKEN` for auth.*
+*API route tests: `node scripts/api-route-test.js health|chat|lesson|story|all` against api-dev.owlby.com. Set `OWLBY_TEST_TOKEN` for auth.*

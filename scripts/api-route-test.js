@@ -12,9 +12,8 @@
  *   node scripts/api-route-test.js chat
  *   node scripts/api-route-test.js lesson
  *   node scripts/api-route-test.js story
- *   node scripts/api-route-test.js tags
  *
- * Set OWLBY_TEST_TOKEN in env for chat/lesson/story/tags (Supabase JWT). Health needs no token.
+ * Set OWLBY_TEST_TOKEN in env for chat/lesson/story (Supabase JWT). Health needs no token.
  */
 
 import fs from 'fs';
@@ -63,15 +62,6 @@ function buildRoutes(promptSet) {
         tags: promptSet.story.tags,
       },
     },
-    tags: {
-      method: 'POST',
-      path: '/api/tags/generate-tags',
-      headers: { 'Content-Type': 'application/json', Authorization: authHeader },
-      body: {
-        context: `${promptSet.chat.message}. ${promptSet.lesson.topic}`,
-        source: 'chat',
-      },
-    },
   };
 }
 
@@ -86,7 +76,7 @@ async function runOne(name, routes, opts = {}) {
   const r = routes[name];
   if (!r) {
     console.error('Unknown route:', name);
-    console.error('Use: health | chat | lesson | story | tags | all');
+    console.error('Use: health | chat | lesson | story | all');
     process.exit(1);
   }
 
@@ -142,16 +132,16 @@ async function runOne(name, routes, opts = {}) {
   return result;
 }
 
-const ROUTE_ORDER = ['health', 'chat', 'lesson', 'story', 'tags'];
+const ROUTE_ORDER = ['health', 'chat', 'lesson', 'story'];
 
 async function main() {
   const arg = (process.argv[2] || 'all').toLowerCase();
   const runAll = arg === 'all';
   const routesToRun = runAll ? ROUTE_ORDER : [arg];
 
-  if (routesToRun[0] && !routesToRun[0].match(/^(health|chat|lesson|story|tags)$/)) {
+  if (routesToRun[0] && !routesToRun[0].match(/^(health|chat|lesson|story)$/)) {
     console.error('Unknown route:', routesToRun[0]);
-    console.error('Use: health | chat | lesson | story | tags | all (or no arg to run all)');
+    console.error('Use: health | chat | lesson | story | all (or no arg to run all)');
     process.exit(1);
   }
 

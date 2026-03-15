@@ -1,60 +1,18 @@
 import { Type } from '@google/genai';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
+import { TAGS_SCHEMA_FRAGMENT } from './ai-tags.js';
 
 /**
  * Centralized AI Response Schemas for Owlby
- * All schemas include standardized achievement tag fields for consistency
+ * Tag fields (requiredCategoryTags, optionalTags) come from lib/ai-tags.ts for all routes.
  */
 
 /**
- * Base achievement tags schema used across all endpoints
- */
-const ACHIEVEMENT_TAGS_SCHEMA = {
-  // Deprecated: kept for backward compatibility
-  tags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } 
-  },
-  // Current: required category tags for achievement system
-  requiredCategoryTags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } 
-  },
-  // Current: required detailed context tags (passed to lesson/story routes)
-  optionalTags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING },
-    description: "Required detailed context tags that carry specific information (people, places, concepts) to lesson/story routes"
-  }
-};
-
-/**
- * Tags-only response schema for the dedicated tags API
- * Used when generating only requiredCategoryTags and optionalTags from context
- */
-export const tagsResponseSchema = {
-  type: Type.OBJECT,
-  required: ['requiredCategoryTags', 'optionalTags'],
-  properties: {
-    requiredCategoryTags: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any },
-      description: 'Exactly 1 topic category from the enum',
-    },
-    optionalTags: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: '0–5 context tags (people, places, concepts). No PII.',
-    },
-  },
-} as const;
-
-/**
- * Chat response schema for conversational AI interactions (no tags – tags come from dedicated tags API)
+ * Chat response schema (includes tags; see lib/ai-tags.ts for tag definitions).
  */
 export const chatResponseSchema = {
   type: Type.OBJECT,
-  required: ['response_text', 'interactive_elements'],
+  required: ['response_text', 'interactive_elements', 'requiredCategoryTags', 'optionalTags'],
   properties: {
     response_text: {
       type: Type.OBJECT,
@@ -92,28 +50,7 @@ export const chatResponseSchema = {
         },
       },
     },
-  },
-} as const;
-
-/**
- * Chat response schema WITH tags in one JSON (for testing / combined flow).
- * Same as chatResponseSchema plus requiredCategoryTags and optionalTags.
- */
-export const chatResponseWithTagsSchema = {
-  type: Type.OBJECT,
-  required: ['response_text', 'interactive_elements', 'requiredCategoryTags', 'optionalTags'],
-  properties: {
-    ...chatResponseSchema.properties,
-    requiredCategoryTags: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any },
-      description: '1–3 topic categories from the enum (TOPIC only, no usage/behavior categories).',
-    },
-    optionalTags: {
-      type: Type.ARRAY,
-      items: { type: Type.STRING },
-      description: '3–10 context tags (concepts, places, terms). No PII.',
-    },
+    ...TAGS_SCHEMA_FRAGMENT,
   },
 } as const;
 
@@ -164,7 +101,7 @@ export const lessonResponseSchema = {
             }
           }
         },
-        ...ACHIEVEMENT_TAGS_SCHEMA,
+        ...TAGS_SCHEMA_FRAGMENT,
       }
     }
   },
@@ -208,7 +145,7 @@ export const storyResponseSchema = {
           type: Type.STRING,
           description: "Optional lesson or moral from the story"
         },
-        ...ACHIEVEMENT_TAGS_SCHEMA,
+        ...TAGS_SCHEMA_FRAGMENT,
       }
     }
   }

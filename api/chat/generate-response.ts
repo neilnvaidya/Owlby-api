@@ -4,6 +4,7 @@ import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai
 import {
   handleCORS,
   processAIRequest,
+  normalizeAchievementTags,
 } from '../../lib/api-handler.js';
 import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config.js';
 import { verifySupabaseToken } from '../../lib/auth-supabase.js';
@@ -42,10 +43,12 @@ function processOwlbyResponse(responseText: string) {
     const jsonResponse = JSON.parse(responseText);
 
     if (jsonResponse.response_text && jsonResponse.interactive_elements) {
-      return {
-        success: true,
-        data: jsonResponse,
+      const data = {
+        ...jsonResponse,
+        requiredCategoryTags: Array.isArray(jsonResponse.requiredCategoryTags) ? jsonResponse.requiredCategoryTags : [],
+        optionalTags: Array.isArray(jsonResponse.optionalTags) ? jsonResponse.optionalTags : [],
       };
+      return { success: true, data };
     } else {
       throw new Error('Invalid JSON structure');
     }
@@ -64,9 +67,8 @@ function processOwlbyResponse(responseText: string) {
           learn_more: { topic: "Explore this topic further" },
           story_button: { prompt: "Tell me a fun story about this topic" },
         },
-        content_blocks: {
-          safety_filter: false,
-        },
+        requiredCategoryTags: [],
+        optionalTags: [],
       },
     };
   }
@@ -307,10 +309,7 @@ export default async function handler(req: any, res: any) {
       timing.aiMs = aiDurationMs;
 
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
-
-      // Tags come from the dedicated tags API (frontend calls it after this response)
-      processedResponse.requiredCategoryTags = [];
-      processedResponse.optionalTags = [];
+      normalizeAchievementTags(processedResponse);
 
       console.log(
         '[CHAT API] Full response structure:',
