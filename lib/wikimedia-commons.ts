@@ -76,7 +76,7 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
   }
 
   const data = (await res.json()) as {
-    preferred?: { url?: string; width?: number; height?: number };
+    preferred?: { url?: string; width?: number; height?: number; mediatype?: string };
     file_description_url?: string;
   };
 
@@ -84,6 +84,10 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
   const imageUrl = preferred?.url;
   const descUrl = data?.file_description_url;
 
+  // Only accept bitmap images (photos, PNGs, etc.). Skip PDFs and other document types.
+  if (preferred?.mediatype !== 'BITMAP') {
+    return null;
+  }
   if (!imageUrl || typeof imageUrl !== 'string') {
     return null;
   }
@@ -103,27 +107,11 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
 const DEFAULT_FALLBACK_QUERY = 'nature';
 
 /**
- * Build search query from tags; use fallback if no tags.
+ * Get one relevant image from Commons for a single search query.
+ * Skips non-file and non-bitmap results (e.g. gallery pages, PDFs).
  */
-function buildQuery(tags: string[], fallbackQuery?: string): string {
-  const trimmed = tags.filter((t) => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
-  if (trimmed.length > 0) {
-    return trimmed.slice(0, 2).join(' ');
-  }
-  return (fallbackQuery && fallbackQuery.trim()) || DEFAULT_FALLBACK_QUERY;
-}
-
-/**
- * Get one relevant image from Commons for the given tags (or fallback query).
- * Skips non-file results (e.g. gallery pages).
- */
-export async function getImageForTags(
-  tags: string[],
-  fallbackQuery?: string
-): Promise<GetImageResult | GetImageError> {
-  const query = buildQuery(tags, fallbackQuery);
+async function getOneImageForQuery(query: string): Promise<GetImageResult | null> {
   const pages = await searchPages(query, 10);
-
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
 
   for (const page of filePages) {
@@ -135,6 +123,28 @@ export async function getImageForTags(
         width: details.width,
         height: details.height,
       };
+    }
+  }
+  return null;
+}
+
+/**
+ * Get one relevant image from Commons for the given tags (or fallback query).
+ * Runs multiple searches — one per tag — and returns the first successful image.
+ * That way both keywords are tried (e.g. "prism" then "flamingo") instead of a single combined query.
+ */
+export async function getImageForTags(
+  tags: string[],
+  fallbackQuery?: string
+): Promise<GetImageResult | GetImageError> {
+  const trimmed = tags.filter((t) => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
+  const queries = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
+
+  for (const query of queries) {
+    if (!query) continue;
+    const result = await getOneImageForQuery(query);
+    if (result) {
+      return result;
     }
   }
 
