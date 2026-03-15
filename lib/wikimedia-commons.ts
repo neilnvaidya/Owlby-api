@@ -122,15 +122,64 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
 
 const DEFAULT_FALLBACK_QUERY = 'nature';
 
+/** Append to search so Commons returns image files first (fewer PDFs → usually 1 file call per tag). */
+const IMAGE_FILTER = ' filemime:image';
+
 /**
- * Get one relevant image from Commons for a single search query (tag used directly).
- * Skips non-file and non-bitmap results (e.g. gallery pages, PDFs).
+ * Build a Commons search query that favours image files and optional phrase match.
+ * - Multi-word phrases are wrapped in quotes for better match (e.g. "honey bee").
+ * - We append filemime:image so results are mostly image files; first hit is often a valid bitmap.
+ */
+function buildImageSearchQuery(userQuery: string): string {
+  const trimmed = userQuery.trim();
+  if (!trimmed) return DEFAULT_FALLBACK_QUERY + IMAGE_FILTER;
+  const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
+  const phrase = words.length > 1 ? `"${trimmed}"` : trimmed;
+  return phrase + IMAGE_FILTER;
+}
+
+/**
+ * Score how well a Commons file title matches the search query (0 = no match).
+ * Uses search-term overlap: whole-word match in filename scores higher than substring.
+ * Callers should pass a good Wikimedia search phrase (e.g. from Gemini) for best results.
+ */
+function scoreFilename(search: string, title: string): number {
+  if (!title || !search) return 0;
+  const searchWords = search
+    .toLowerCase()
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  const namePart = title.replace(/^File:/i, '').replace(/\.[a-z0-9]+$/i, '');
+  const nameWords = namePart
+    .toLowerCase()
+    .split(/[\s_\-–—(),]+/)
+    .filter((w) => w.length > 0);
+  const nameLower = namePart.toLowerCase();
+  let score = 0;
+  for (const word of searchWords) {
+    if (word.length < 2) continue;
+    if (nameWords.includes(word)) score += 2;
+    else if (nameLower.includes(word)) score += 1;
+  }
+  return score;
+}
+
+/**
+ * Get one relevant image from Commons for a single search query.
+ * Uses similarity scoring only (search terms in filename); picks highest-scoring valid bitmap.
+ * Query should be a short, descriptive phrase suitable for Commons (e.g. "honey bee", "prism optical").
  */
 async function getOneImageForQuery(query: string): Promise<GetImageResult | null> {
-  const pages = await searchPages(query, 10);
+  const searchQ = buildImageSearchQuery(query);
+  const pages = await searchPages(searchQ, 10);
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
 
-  for (const page of filePages) {
+  const scored = filePages
+    .map((p) => ({ page: p, score: scoreFilename(query, p.title) }))
+    .sort((a, b) => b.score - a.score);
+
+  for (const { page } of scored) {
     const details = await getFileDetails(page.title);
     if (details) {
       return {
@@ -141,13 +190,15 @@ async function getOneImageForQuery(query: string): Promise<GetImageResult | null
       };
     }
   }
+
   return null;
 }
 
 /**
- * Fetch one image per tag from Commons. Runs all tag searches in parallel (one Wikimedia
- * request per tag at the same time). Uses each tag directly as the search query.
- * Returns an array with one result per tag (image or error).
+ * Fetch one image per tag from Commons. Runs all tag searches in parallel.
+ * Each tag is used as the Commons search query (with filemime:image and optional phrase quotes).
+ * Call count: 2 per image (search + file), but all N are parallel so e.g. 3 images = 2 round-trips.
+ * For best results, pass short descriptive phrases from Gemini (e.g. "honey bee", "prism optical").
  */
 export async function getImagesForTags(
   tags: string[],
