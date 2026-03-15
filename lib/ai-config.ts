@@ -5,7 +5,7 @@ import {
   HarmCategory,
 } from '@google/genai';
 
-import { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES } from './config';
+import { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES } from './config.js';
 
 config();
 

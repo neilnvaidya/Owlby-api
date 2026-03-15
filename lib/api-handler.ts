@@ -7,10 +7,10 @@ import {
   CORS_HEADERS,
   ROUTE_MODEL_CONFIG,
   ROUTE_TEMPERATURES,
-} from './config';
-import { buildAIConfig, logTokenUsage } from './ai-config';
-import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
-import { executeGemini } from './ai-providers/gemini';
+} from './config.js';
+import { buildAIConfig, logTokenUsage } from './ai-config.js';
+import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
+import { executeGemini } from './ai-providers/gemini.js';
 
 /**
  * Standard API Handler Utilities for Owlby

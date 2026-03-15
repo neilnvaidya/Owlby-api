@@ -1,15 +1,15 @@
-import { logChatCall, flushApiLogger } from '../../lib/api-logger';
-import { chatResponseSchema } from '../../lib/ai-schemas';
-import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions';
+import { logChatCall, flushApiLogger } from '../../lib/api-logger.js';
+import { chatResponseSchema } from '../../lib/ai-schemas.js';
+import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions.js';
 import {
   handleCORS,
   processAIRequest,
-} from '../../lib/api-handler';
-import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
-import { checkRateLimit } from '../../lib/rate-limit';
-import { canGenerate } from '../../lib/subscription-gate';
-import { incrementDailyUsage } from '../../lib/usage-daily';
+} from '../../lib/api-handler.js';
+import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
+import { checkRateLimit } from '../../lib/rate-limit.js';
+import { canGenerate } from '../../lib/subscription-gate.js';
+import { incrementDailyUsage } from '../../lib/usage-daily.js';
 
 const ENABLE_API_LOGGING = true;
 const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';

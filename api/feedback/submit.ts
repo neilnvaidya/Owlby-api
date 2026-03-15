@@ -1,5 +1,5 @@
-import { supabase } from '../../lib/supabase';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
+import { supabase } from '../../lib/supabase.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
 
 export interface FeedbackSubmission {
   feedback_type: 'general' | 'bug_report' | 'feature_request' | 'learning_experience';

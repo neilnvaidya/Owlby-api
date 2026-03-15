@@ -1,5 +1,5 @@
-import { ai, buildAIConfig } from '../ai-config';
-import type { AIAdapterResult, AIHelper, NormalizedUsage, UnifiedRequestParams } from './types';
+import { ai } from '../ai-config.js';
+import type { AIAdapterResult, NormalizedUsage } from './types.js';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -34,7 +34,7 @@ export async function executeGemini(
   contents: any[],
   timeoutMs: number
 ): Promise<AIAdapterResult> {
-  const response = await withTimeout(
+  const raw = await withTimeout(
     ai.models.generateContent({
       model: modelName,
       config,
@@ -43,11 +43,12 @@ export async function executeGemini(
     timeoutMs,
     'AI_REQUEST_TIMEOUT'
   );
+  const response = raw as { text?: string; candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: any };
 
   const responseText =
     response.text ||
-    (Array.isArray((response as any).candidates) && (response as any).candidates.length > 0
-      ? (response as any).candidates[0].content?.parts?.map((p: any) => p.text).join('') || ''
+    (Array.isArray(response.candidates) && response.candidates.length > 0
+      ? response.candidates[0].content?.parts?.map((p) => p.text).join('') || ''
       : '');
 
   if (!responseText) {
@@ -60,23 +61,3 @@ export async function executeGemini(
     usageMetadata,
   };
 }
-
-/**
- * Unified entry: build Gemini config from params and execute.
- * Used by executeRequest() when the model is a Gemini model.
- */
-export async function executeGeminiRequest(
-  modelId: string,
-  params: UnifiedRequestParams
-): Promise<AIAdapterResult> {
-  const config = buildAIConfig(
-    modelId,
-    params.responseSchema,
-    params.systemInstruction,
-    params.maxOutputTokens,
-    params.temperature
-  );
-  return executeGemini(modelId, config, params.contents, params.timeoutMs);
-}
-
-export const geminiHelper: AIHelper = { execute: executeGeminiRequest };

@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 const EMAIL_VERIFICATION_SECRET =
   process.env.EMAIL_VERIFICATION_SECRET ||

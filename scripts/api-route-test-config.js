@@ -13,8 +13,4 @@ const AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsImtpZCI6Iml0aFh4K2dJWDgzTVNjSzMiLCJ0eXAi
 // Where to append test results (one JSON object per line), relative to scripts/.
 const RESULTS_FILE = 'api-test-results.jsonl';
 
-module.exports = {
-  API_BASE_URL,
-  AUTH_TOKEN,
-  RESULTS_FILE,
-};
+export { API_BASE_URL, AUTH_TOKEN, RESULTS_FILE };

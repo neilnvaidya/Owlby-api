@@ -11,10 +11,12 @@
  * Set OWLBY_TEST_TOKEN for chat/lesson/story (Supabase JWT). Results appended to api-test-results.jsonl.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { API_BASE_URL, AUTH_TOKEN, RESULTS_FILE } = require('./api-route-test-config.js');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { API_BASE_URL, AUTH_TOKEN, RESULTS_FILE } from './api-route-test-config.js';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const RESULTS_PATH = path.resolve(__dirname, RESULTS_FILE);
 
 const routes = {

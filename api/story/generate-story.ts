@@ -1,16 +1,16 @@
-import { logStoryCall, flushApiLogger } from '../../lib/api-logger';
-import { storyResponseSchema } from '../../lib/ai-schemas';
-import { getStoryInstructions } from '../../lib/ai-instructions';
-import { 
-  handleCORS, 
-  processAIRequest, 
-  normalizeAchievementTags, 
-  createErrorResponse 
-} from '../../lib/api-handler';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
-import { checkRateLimit } from '../../lib/rate-limit';
-import { canGenerate } from '../../lib/subscription-gate';
-import { incrementDailyUsage } from '../../lib/usage-daily';
+import { logStoryCall, flushApiLogger } from '../../lib/api-logger.js';
+import { storyResponseSchema } from '../../lib/ai-schemas.js';
+import { getStoryInstructions } from '../../lib/ai-instructions.js';
+import {
+  handleCORS,
+  processAIRequest,
+  normalizeAchievementTags,
+  createErrorResponse,
+} from '../../lib/api-handler.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
+import { checkRateLimit } from '../../lib/rate-limit.js';
+import { canGenerate } from '../../lib/subscription-gate.js';
+import { incrementDailyUsage } from '../../lib/usage-daily.js';
 
 /**
  * Process the JSON response from story generation API

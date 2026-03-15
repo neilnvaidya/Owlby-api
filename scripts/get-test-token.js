@@ -8,10 +8,16 @@
  * Then: export OWLBY_TEST_TOKEN='<printed-token>' && node scripts/api-route-test.js chat
  */
 
-require('dotenv').config({ path: require('path').resolve(__dirname, '..', '.env') });
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
+
+const supabaseUrl = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnon = process.env.SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const email = process.env.TEST_USER_EMAIL;
 const password = process.env.TEST_USER_PASSWORD;
 
@@ -25,7 +31,6 @@ if (!email || !password) {
 }
 
 async function main() {
-  const { createClient } = require('@supabase/supabase-js');
   const supabase = createClient(supabaseUrl, supabaseAnon);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {

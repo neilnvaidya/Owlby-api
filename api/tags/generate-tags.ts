@@ -1,12 +1,12 @@
-import { tagsResponseSchema } from '../../lib/ai-schemas';
-import { getTagsInstructions } from '../../lib/ai-instructions';
+import { tagsResponseSchema } from '../../lib/ai-schemas.js';
+import { getTagsInstructions } from '../../lib/ai-instructions.js';
 import {
   handleCORS,
   processAIRequest,
   normalizeAchievementTags,
-} from '../../lib/api-handler';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
-import { checkRateLimit } from '../../lib/rate-limit';
+} from '../../lib/api-handler.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
+import { checkRateLimit } from '../../lib/rate-limit.js';
 
 const MAX_CONTEXT_LENGTH = 2000;
 const TAGS_MAX_OUTPUT_TOKENS = 256;

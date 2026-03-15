@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { verifySupabaseToken } from '../lib/auth-supabase';
-import { supabase } from '../lib/supabase';
-import { createVerificationToken, verifyAndConsumeToken } from '../lib/verification-token';
+import { verifySupabaseToken } from '../lib/auth-supabase.js';
+import { supabase } from '../lib/supabase.js';
+import { createVerificationToken, verifyAndConsumeToken } from '../lib/verification-token.js';
 
 const webBaseUrl =
   process.env.WEB_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://owlby.com';

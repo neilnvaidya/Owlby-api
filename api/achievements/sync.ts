@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { supabase } from '../../lib/supabase';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
+import { supabase } from '../../lib/supabase.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
 
 export interface AchievementData {
   starRepository: {

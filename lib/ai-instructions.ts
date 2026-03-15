@@ -1,5 +1,5 @@
-import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
-import { gradeToAge, MODELS } from './ai-config';
+import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
+import { gradeToAge, MODELS } from './ai-config.js';
 
 /**
  * Core AI Instructions for Owlby

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { UserProfile, ProfileUpdateRequest } from '../lib/profile-types';
-import { supabase } from '../lib/supabase';
-import { verifySupabaseToken } from '../lib/auth-supabase';
-import { canGenerate } from '../lib/subscription-gate';
+import { UserProfile, ProfileUpdateRequest } from '../lib/profile-types.js';
+import { supabase } from '../lib/supabase.js';
+import { verifySupabaseToken } from '../lib/auth-supabase.js';
+import { canGenerate } from '../lib/subscription-gate.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') {

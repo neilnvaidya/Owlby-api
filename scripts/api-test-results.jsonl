@@ -1,2 +1,2 @@
-{"route":"health","url":"https://api-dev.owlby.com/api/profile?scope=health","method":"GET","timestamp":"2026-03-15T03:33:39.802Z","status":500,"durationMs":573,"error":null,"body":{"keys":["_raw"]}}
-{"route":"health","url":"https://api-dev.owlby.com/api/profile?scope=health","method":"GET","timestamp":"2026-03-15T03:34:01.803Z","status":500,"durationMs":461,"error":null,"body":{"keys":["_raw"]}}
+{"route":"health","url":"https://api-dev.owlby.com/api/profile?scope=health","method":"GET","timestamp":"2026-03-15T03:40:06.871Z","status":500,"durationMs":836,"error":null,"body":{"keys":["_raw"]}}
+{"route":"health","url":"https://api-dev.owlby.com/api/profile?scope=health","method":"GET","timestamp":"2026-03-15T03:43:14.257Z","status":500,"durationMs":1815,"error":null,"body":{"keys":["_raw"]}}

@@ -1,5 +1,5 @@
 import { Type } from '@google/genai';
-import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
+import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
 
 /**
  * Centralized AI Response Schemas for Owlby
