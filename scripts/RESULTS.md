@@ -14,7 +14,7 @@ Models match **`lib/config.ts`** (Gemini only): `gemini-3.1-flash-lite-preview`,
 | **gemini-2.5-flash**             | 7,788 / 7,708 | 6,235               | 6,227                  | 6,879         | 6,278             |
 | **gemini-2.5-pro**              | —           | —                     | —                      | —             | —                 |
 
-Fill in columns as you run with more `PARTS_INCLUDED` in `gemini-chat-test.js` (see `scripts/test-config.js` for prompt/topic).
+Fill in columns as you run API route tests; prompts come from `api-route-test-config.js` (5 prompt sets, one chosen at random per run).
 
 ## Notes
 
@@ -29,18 +29,12 @@ Fill in columns as you run with more `PARTS_INCLUDED` in `gemini-chat-test.js` (
 <summary>Click to expand: full terminal output (lines 7–189)</summary>
 
 ```text
-neilvaidya@Neils-MacBook-Air Owlby-api % node ./scripts/gemini-test.js
-Parts included: body | targetAudience | responseRequirements
-Model: gemini-2.5-flash
----
-Response time: 6227 ms
----
-A **rainbow** is a beautiful arc of colors that appears in the sky when **sunlight** shines through tiny **water droplets** in the air. You often see them after it rains, or sometimes near a waterfall or a sprinkler.
-...
-neilvaidya@Neils-MacBook-Air Owlby-api %
+node scripts/api-route-test.js all
+# Runs: health → chat → lesson → story → tags (prompt set chosen at random).
+# Results append to api-test-results.jsonl.
 ```
 </details>
 
 ---
 
-*Use `node scripts/gemini-chat-test.js` for chat timing. API route tests: `node scripts/api-route-test.js health|chat|lesson|story|all` against api-dev.owlby.com.*
+*API route tests: `node scripts/api-route-test.js health|chat|lesson|story|tags|all` against api-dev.owlby.com. Set `OWLBY_TEST_TOKEN` for auth.*

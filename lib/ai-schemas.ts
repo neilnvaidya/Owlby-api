@@ -96,6 +96,28 @@ export const chatResponseSchema = {
 } as const;
 
 /**
+ * Chat response schema WITH tags in one JSON (for testing / combined flow).
+ * Same as chatResponseSchema plus requiredCategoryTags and optionalTags.
+ */
+export const chatResponseWithTagsSchema = {
+  type: Type.OBJECT,
+  required: ['response_text', 'interactive_elements', 'requiredCategoryTags', 'optionalTags'],
+  properties: {
+    ...chatResponseSchema.properties,
+    requiredCategoryTags: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any },
+      description: '1–3 topic categories from the enum (TOPIC only, no usage/behavior categories).',
+    },
+    optionalTags: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '3–10 context tags (concepts, places, terms). No PII.',
+    },
+  },
+} as const;
+
+/**
  * Lesson response schema for educational content generation
  */
 export const lessonResponseSchema = {

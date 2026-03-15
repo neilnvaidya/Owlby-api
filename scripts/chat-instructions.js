@@ -58,6 +58,37 @@ export const outputRules = `OUTPUT RULES (MUST COMPLY):
 
 CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.`;
 
+/** Topic-only categories for tags (keep in sync with lib/badgeCategories.ts) */
+const ACHIEVEMENT_TAG_ENUM = [
+  'READING_STORIES', 'LANGUAGE_WORDS', 'SPEAKING_LISTENING', 'MATH_NUMBERS', 'MATH_PATTERNS',
+  'PROBLEM_SOLVING', 'ANIMALS_NATURE', 'PLANTS_GARDENS', 'SPACE_PLANETS', 'EXPERIMENTS_DISCOVERY',
+  'COUNTRIES_CULTURES', 'HISTORY_HEROES', 'COMMUNITY_HELPERS', 'FRIENDSHIP_KINDNESS', 'HEALTH_SAFETY',
+  'CREATIVITY_ARTS',
+];
+
+/** Part 4b: Tags output rules (when response includes requiredCategoryTags + optionalTags) */
+export const tagsOutputRules = `TAGS (include in same JSON when using combined format):
+- requiredCategoryTags: 1–3 values from [${ACHIEVEMENT_TAG_ENUM.join(', ')}]. TOPIC categories only. Do NOT include usage/behavior categories (e.g. CHAT_CHAMPION, DAILY_LEARNER, EXPLORATION_MASTER, LEARNING_STREAK).
+- optionalTags: 3–10 short free-form strings (concepts, places, terms from your response). No PII.`;
+
+/** Output rules when response includes tags (combined chat + tags format) */
+export const outputRulesWithTags = `OUTPUT RULES (MUST COMPLY):
+1. Return VALID JSON adhering exactly to the provided schema (chatResponseWithTags). Do NOT wrap in markdown.
+2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags (all four required).
+3. response_text.main: 2–3 paragraphs (300-1000 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
+   - Use markdown formatting: **bold** important keywords, terms, or concepts
+   - Bold key scientific terms, names, historical figures, or important concepts
+   - Keep bolding natural and educational - typically 1-3 bolded terms per paragraph
+   - You can use bullet points (- item) for lists and structured information when helpful
+4. response_text.follow_up: ONE complete engaging follow-up question (50-200 characters). MUST be a complete sentence ending with a question mark.
+5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
+6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" }.
+7. interactive_elements.story_button: Include when a short story could illustrate the topic. Structure: { "prompt": "simple story prompt" }.
+
+${tagsOutputRules}
+
+CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.`;
+
 /** Part 5: Recent context + closing */
 export const contextAndClose = (recentContext) => `Recent conversation context:
 ${recentContext}
@@ -79,7 +110,7 @@ export function buildSystemInstruction(partsIncluded, gradeLevel = 3, recentCont
   if (partsIncluded.includes("body")) sections.push(body);
   if (partsIncluded.includes("targetAudience")) sections.push(targetAudience(gradeLevel));
   if (partsIncluded.includes("responseRequirements")) sections.push(responseRequirements);
-  if (partsIncluded.includes("outputRules")) sections.push(outputRules);
+  if (partsIncluded.includes("outputRules")) sections.push(partsIncluded.includes("tags") ? outputRulesWithTags : outputRules);
   if (partsIncluded.includes("contextAndClose")) sections.push(contextAndClose(recentContext));
   const systemContent = sections.join("\n\n");
   return { systemContent, partsIncluded: [...partsIncluded] };

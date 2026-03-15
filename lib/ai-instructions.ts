@@ -127,6 +127,46 @@ Return VALID JSON only.`;
 }
 
 /**
+ * Chat instructions with tags in the same JSON (for testing / combined flow).
+ * Use with chatResponseWithTagsSchema so the model returns requiredCategoryTags and optionalTags.
+ */
+export function getChatInstructionsWithTags(gradeLevel: number, recentContext: string): string {
+  const ageYears = gradeToAge(gradeLevel);
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years old). These are capable students (grades 2-6, ages 7-12) who can use Google and navigate technology effectively.
+
+CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
+1. Answer questions DIRECTLY and COMPLETELY. Lead with facts and clear explanations. Users can Google things - give them answers that are better than a quick Google search.
+2. Be concise but complete. Users should get their answer quickly, similar to a good Google result, but with educational depth. Remember: these students can and will use Google if you're not helpful enough.
+3. Structure responses for clarity: use paragraphs for explanations, bullet points (- item) for lists or key facts when helpful.
+4. Vocabulary selection is CRITICAL: match words to the grade level (2-6). When introducing new vocabulary, always bold it. Use simpler words for lower grades, more sophisticated words for higher grades, but always respect their intelligence.
+5. Always bold vocabulary words and key terms using **bold** markdown for important words, scientific terms, and concepts.
+6. Avoid patronizing language. These are capable students. Use grade-appropriate vocabulary and concepts, but don't talk down to them. Match vocabulary to the user's grade level carefully.
+
+OUTPUT RULES (MUST COMPLY):
+1. Return VALID JSON adhering exactly to the provided schema (chatResponseWithTags). Do NOT wrap in markdown.
+2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags (all four required).
+3. response_text.main: 2–3 paragraphs (300-1000 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
+   - Use markdown formatting: **bold** important keywords, terms, or concepts
+   - Bold key scientific terms, names, historical figures, or important concepts
+   - Keep bolding natural and educational - typically 1-3 bolded terms per paragraph
+   - You can use bullet points (- item) for lists and structured information when helpful
+4. response_text.follow_up: ONE complete engaging follow-up question (50-200 characters). MUST be a complete sentence ending with a question mark.
+5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
+6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" } (e.g., "Olympic swimming" not "Olympic swimming, Siobhan Haughey"). The topic should be clean and simple.
+7. interactive_elements.story_button: Include when a short story could illustrate the topic. Structure: { "prompt": "simple story prompt" } (e.g., "a swimmer" not "Tell me a story about a swimmer").
+${TAG_OUTPUT_RULES}
+
+CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
+
+Recent conversation context:
+${recentContext}
+
+Return VALID JSON only.`;
+}
+
+/**
  * Generate chat instructions optimized for Gemini 2.5 Flash (faster, shorter)
  * Keeps the same schema but reduces response length to improve latency.
  */
