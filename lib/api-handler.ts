@@ -85,7 +85,7 @@ function shouldFallback(error: any): boolean {
 
 /**
  * Attempt a single AI request with a specific model.
- * Resolves provider (gemini vs openai) and calls the appropriate adapter.
+ * Project is 100% Gemini; getProviderForModel() always returns 'gemini'.
  */
 async function attemptAIRequest(
   modelName: string,

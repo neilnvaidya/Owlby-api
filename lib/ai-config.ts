@@ -28,19 +28,13 @@ export const MODELS = {
 } as const;
 
 /**
- * Model id -> provider. All Gemini model ids use 'gemini'.
- * Add OpenAI-compatible model ids (e.g. gpt-4o-mini, deepseek-chat) with 'openai'.
- * Unknown models default to 'gemini' in getProviderForModel().
+ * Model id -> provider. Project is 100% Gemini; all AI routes use these models only.
+ * getProviderForModel() always returns 'gemini'.
  */
-// FLASH and FLASH_PREVIEW are the same model id; list once to avoid duplicate key
-export const MODEL_PROVIDER: Record<string, 'gemini' | 'openai'> = {
+export const MODEL_PROVIDER: Record<string, 'gemini'> = {
   [MODELS.FLASH_PREVIEW]: 'gemini',
   [MODELS.FLASH_OLD]: 'gemini',
   [MODELS.PRO]: 'gemini',
-  // OpenAI-compatible models (uncomment or add when using):
-  // 'gpt-4o-mini': 'openai',
-  // 'gpt-4o': 'openai',
-  // 'deepseek-chat': 'openai',
 };
 
 /**
