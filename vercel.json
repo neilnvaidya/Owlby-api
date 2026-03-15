@@ -79,6 +79,10 @@
     {
       "source": "/api/resend-verification",
       "destination": "/api/email?action=resend"
+    },
+    {
+      "source": "/media/image",
+      "destination": "/api/media/image"
     }
   ]
 }

@@ -1,8 +1,34 @@
 # API test results — analysis
 
-**Source:** `api-test-results.jsonl` (36 records)  
+**Source:** `api-test-results.jsonl`  
 **Scope:** Health, Chat, Lesson, Story against api-dev.owlby.com  
 **Reference:** `lib/ai-schemas.ts`, route handlers in `api/`
+
+---
+
+## 0. Latest runs (tags inlined into chat/lesson/story)
+
+**Two full runs** (lines 54–61 in JSONL), after tags were folded into each route and the standalone tags route removed:
+
+| Run | promptSetId | health | chat | lesson | story | Notes |
+|-----|-------------|--------|------|--------|-------|--------|
+| A   | 3 (day/night) | 200, 914ms | 200, 4132ms | 200, 4130ms | 200, 2612ms | All success |
+| B   | 5 (fish/gills) | 200, 485ms | 200, 3870ms | 200, 3141ms | 200, 2787ms | All success |
+
+**Improvements:**
+- **Chat now returns tags:** `requiredCategoryTags` and `optionalTags` are no longer empty.  
+  - Set 3: `["SPACE_PLANETS"]`, `["Earth","rotation","Sun","axis","day and night"]`.  
+  - Set 5: `["ANIMALS_NATURE"]`, `["gills","dissolved oxygen","fish biology","underwater respiration","aquatic animals"]`.  
+  Quality is good and on-topic.
+- **No separate tags route:** The old 500 from `/api/tags/generate-tags` (line 53) is gone; tags come only from chat/lesson/story bodies.
+- **No failures:** All 8 calls (2× health/chat/lesson/story) returned 200 with `body.success: true` where applicable. No story timeout or “Something went wrong”.
+- **Latency:** Chat 2.7–4.1s, lesson 3.1–4.1s, story 2.6–2.8s — no 12s or 26s outliers in these runs.
+
+**Still to watch:**
+- **Lesson optionalTags** often tokenized (e.g. `["Why","Does","the"]`, `["How","Fish","Breathe"]`) — low value for discovery.
+- **Story optionalTags** mixed: sometimes tokenized (`["The","Great","Celestial"]`), sometimes good (`["ocean","coral reef","marine life","curiosity","exploration"]`).
+
+**Verdict:** Routes are working better: chat tags are inlined and useful, no tags-route failure, and no story failures in these two runs.
 
 ---
 
