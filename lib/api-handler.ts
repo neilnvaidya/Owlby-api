@@ -1,19 +1,21 @@
-import { CORS_HEADERS, ROUTE_MODEL_CONFIG, buildAIConfig, logTokenUsage, ROUTE_TEMPERATURES } from './ai-config';
+import {
+  AI_TIMEOUT_MS,
+  AI_TOTAL_BUDGET_MS,
+  AI_PRIMARY_ATTEMPTS,
+  AI_RETRY_BACKOFF_MS,
+  ENABLE_TIMING_LOGS,
+  CORS_HEADERS,
+  ROUTE_MODEL_CONFIG,
+  ROUTE_TEMPERATURES,
+} from './config';
+import { buildAIConfig, logTokenUsage } from './ai-config';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
 import { executeGemini } from './ai-providers/gemini';
-import { executeOpenAI } from './ai-providers/openai';
-import { getProviderForModel } from './ai-providers/resolve';
 
 /**
  * Standard API Handler Utilities for Owlby
- * Provides consistent error handling, CORS, and response patterns
+ * Gemini only; consistent error handling, CORS, and response patterns
  */
-
-const DEFAULT_AI_TIMEOUT_MS = Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 60000);
-const DEFAULT_AI_TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS ?? 70000);
-const DEFAULT_AI_PRIMARY_ATTEMPTS = Number(process.env.AI_PRIMARY_ATTEMPTS ?? 1);
-const DEFAULT_AI_RETRY_BACKOFF_MS = Number(process.env.AI_RETRY_BACKOFF_MS ?? 250);
-const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   let timeoutId: NodeJS.Timeout;
@@ -84,8 +86,7 @@ function shouldFallback(error: any): boolean {
 }
 
 /**
- * Attempt a single AI request with a specific model.
- * Project is 100% Gemini; getProviderForModel() always returns 'gemini'.
+ * Attempt a single AI request with Gemini.
  */
 async function attemptAIRequest(
   modelName: string,
@@ -93,42 +94,18 @@ async function attemptAIRequest(
   contents: any[],
   endpoint: string,
   inputText: string,
-  timeoutMs: number,
-  systemInstruction: string,
-  responseSchema: any,
-  maxOutputTokens: number,
-  temperature: number
+  timeoutMs: number
 ): Promise<{ responseText: string; usageMetadata: any }> {
   const attemptStart = Date.now();
-  const provider = getProviderForModel(modelName);
-
-  let result: { responseText: string; usageMetadata: any };
-  if (provider === 'gemini') {
-    result = await executeGemini(modelName, config, contents, timeoutMs);
-  } else {
-    result = await executeOpenAI(
-      modelName,
-      systemInstruction,
-      contents,
-      responseSchema,
-      maxOutputTokens,
-      temperature,
-      timeoutMs
-    );
-  }
-
+  const result = await executeGemini(modelName, config, contents, timeoutMs);
   logTokenUsage(endpoint, inputText, result.responseText, result.usageMetadata);
-
-  const durationMs = Date.now() - attemptStart;
   if (ENABLE_TIMING_LOGS) {
     console.info(`[${endpoint}] AI attempt`, {
       model: modelName,
-      provider,
-      durationMs,
+      durationMs: Date.now() - attemptStart,
       timeoutMs,
     });
   }
-
   return result;
 }
 
@@ -163,15 +140,15 @@ export async function processAIRequest(
   const temperature = ROUTE_TEMPERATURES[endpoint] ?? 0.9;
 
   // Attempt primary model (configurable retry count)
-  const primaryAttempts = Math.max(1, DEFAULT_AI_PRIMARY_ATTEMPTS);
+  const primaryAttempts = Math.max(1, AI_PRIMARY_ATTEMPTS);
   for (let attempt = 1; attempt <= primaryAttempts; attempt++) {
     try {
       const elapsedMs = Date.now() - startTime;
-      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      const remainingMs = AI_TOTAL_BUDGET_MS - elapsedMs;
       if (remainingMs <= 0) {
         throw new Error('AI_TOTAL_TIMEOUT');
       }
-      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
+      const timeoutMs = Math.min(AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(primary, responseSchema, systemInstruction, maxOutputTokens, temperature);
       const result = await attemptAIRequest(
         primary,
@@ -179,13 +156,9 @@ export async function processAIRequest(
         contents,
         endpoint,
         inputText,
-        timeoutMs,
-        systemInstruction,
-        responseSchema,
-        maxOutputTokens,
-        temperature
+        timeoutMs
       );
-      
+
       return {
         ...result,
         modelUsed: primary,
@@ -211,20 +184,19 @@ export async function processAIRequest(
         break;
       }
 
-      const backoffMs = DEFAULT_AI_RETRY_BACKOFF_MS * attempt;
+      const backoffMs = AI_RETRY_BACKOFF_MS * attempt;
       await sleep(backoffMs);
     }
   }
 
   if (fallback1 && fallback1 !== primary) {
-    // Fallback to first fallback model (gemini-3-flash)
     try {
       const elapsedMs = Date.now() - startTime;
-      const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+      const remainingMs = AI_TOTAL_BUDGET_MS - elapsedMs;
       if (remainingMs <= 0) {
         throw new Error('AI_TOTAL_TIMEOUT');
       }
-      const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
+      const timeoutMs = Math.min(AI_TIMEOUT_MS, remainingMs);
       const config = buildAIConfig(fallback1, responseSchema, systemInstruction, maxOutputTokens, temperature);
       const result = await attemptAIRequest(
         fallback1,
@@ -232,13 +204,9 @@ export async function processAIRequest(
         contents,
         endpoint,
         inputText,
-        timeoutMs,
-        systemInstruction,
-        responseSchema,
-        maxOutputTokens,
-        temperature
+        timeoutMs
       );
-      
+
       console.warn(`⚠️ [${endpoint}] Fallback to ${fallback1} succeeded`);
       return {
         ...result,
@@ -257,11 +225,11 @@ export async function processAIRequest(
       throw lastError || new Error('AI_PROCESSING_FAILED: duplicate fallback model');
     }
     const elapsedMs = Date.now() - startTime;
-    const remainingMs = DEFAULT_AI_TOTAL_BUDGET_MS - elapsedMs;
+    const remainingMs = AI_TOTAL_BUDGET_MS - elapsedMs;
     if (remainingMs <= 0) {
       throw new Error('AI_TOTAL_TIMEOUT');
     }
-    const timeoutMs = Math.min(DEFAULT_AI_TIMEOUT_MS, remainingMs);
+    const timeoutMs = Math.min(AI_TIMEOUT_MS, remainingMs);
     const config = buildAIConfig(fallback2, responseSchema, systemInstruction, maxOutputTokens, temperature);
     const result = await attemptAIRequest(
       fallback2,
@@ -269,13 +237,9 @@ export async function processAIRequest(
       contents,
       endpoint,
       inputText,
-      timeoutMs,
-      systemInstruction,
-      responseSchema,
-      maxOutputTokens,
-      temperature
+      timeoutMs
     );
-    
+
     console.warn(`⚠️ [${endpoint}] Fallback to ${fallback2} succeeded`);
     return {
       ...result,
