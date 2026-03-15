@@ -53,6 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       imageUrl: result.imageUrl,
       attributionUrl: result.attributionUrl,
+      matchedQuery: result.matchedQuery,
       ...(result.width != null && { width: result.width }),
       ...(result.height != null && { height: result.height }),
     });

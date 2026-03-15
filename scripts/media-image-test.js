@@ -78,6 +78,9 @@ async function run() {
     process.exit(1);
   }
 
+  if (body?.matchedQuery) {
+    log(`matchedQuery: ${body.matchedQuery}`);
+  }
   log(`imageUrl: ${imageUrl}`);
   log(`attributionUrl: ${attributionUrl}`);
 

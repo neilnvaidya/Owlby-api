@@ -24,6 +24,8 @@ export interface CommonsFileDetails {
 export interface GetImageResult {
   imageUrl: string;
   attributionUrl: string;
+  /** Query that produced this image (e.g. "prism" or "prism simple") */
+  matchedQuery: string;
   width?: number;
   height?: number;
 }
@@ -106,11 +108,14 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
 
 const DEFAULT_FALLBACK_QUERY = 'nature';
 
+/** Suffix to prefer simpler, more educational images when available. */
+const SIMPLE_SUFFIX = ' simple';
+
 /**
  * Get one relevant image from Commons for a single search query.
  * Skips non-file and non-bitmap results (e.g. gallery pages, PDFs).
  */
-async function getOneImageForQuery(query: string): Promise<GetImageResult | null> {
+async function getOneImageForQuery(query: string): Promise<Omit<GetImageResult, 'matchedQuery'> | null> {
   const pages = await searchPages(query, 10);
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
 
@@ -130,21 +135,25 @@ async function getOneImageForQuery(query: string): Promise<GetImageResult | null
 
 /**
  * Get one relevant image from Commons for the given tags (or fallback query).
- * Runs multiple searches — one per tag — and returns the first successful image.
- * That way both keywords are tried (e.g. "prism" then "flamingo") instead of a single combined query.
+ * Runs multiple searches: for each tag, tries "<tag> simple" first (for simpler/educational images),
+ * then the raw tag; then moves to the next tag. Returns the first successful image and which query matched.
  */
 export async function getImageForTags(
   tags: string[],
   fallbackQuery?: string
 ): Promise<GetImageResult | GetImageError> {
   const trimmed = tags.filter((t) => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
-  const queries = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
+  const tagsToTry = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
 
-  for (const query of queries) {
-    if (!query) continue;
-    const result = await getOneImageForQuery(query);
-    if (result) {
-      return result;
+  for (const tag of tagsToTry) {
+    if (!tag) continue;
+    // Prefer simpler/educational image: try "prism simple" before "prism"
+    const queriesForTag = [tag + SIMPLE_SUFFIX, tag];
+    for (const query of queriesForTag) {
+      const result = await getOneImageForQuery(query);
+      if (result) {
+        return { ...result, matchedQuery: query };
+      }
     }
   }
 
