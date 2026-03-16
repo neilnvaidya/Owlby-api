@@ -1,11 +1,80 @@
 /**
  * Wikimedia Commons REST API client.
  * Fetches relevant images by search query; returns image URL and attribution.
+ * Optional bot-password auth for higher rate limits (set WIKIMEDIA_BOT_USER and WIKIMEDIA_BOT_PASSWORD).
  * @see https://public-paws.wmcloud.org/User:APaskulin_(WMF)/en-wikipedia-images.ipynb
  */
 
 const COMMONS_BASE = 'https://commons.wikimedia.org/w/rest.php/v1/';
+const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 const USER_AGENT = 'Owlby/1.0 (https://owlby.com)';
+
+let cachedCookie: string | null = null;
+const CACHE_TTL_MS = 50 * 60 * 1000; // 50 minutes
+let cacheExpiry = 0;
+
+/**
+ * Login to Commons with bot password; returns Cookie header value for authenticated requests.
+ * Set env WIKIMEDIA_BOT_USER (e.g. MyUser@mybot) and WIKIMEDIA_BOT_PASSWORD.
+ * See docs/WIKIMEDIA-AUTH.md for setup.
+ */
+async function getCommonsAuth(): Promise<string | null> {
+  if (Date.now() < cacheExpiry && cachedCookie) return cachedCookie;
+  const user = process.env.WIKIMEDIA_BOT_USER?.trim();
+  const password = process.env.WIKIMEDIA_BOT_PASSWORD?.trim();
+  if (!user || !password) return null;
+
+  try {
+    const tokenRes = await fetch(
+      `${COMMONS_API}?action=query&meta=tokens&type=login&format=json`,
+      { headers: { 'User-Agent': USER_AGENT } }
+    );
+    const tokenData = (await tokenRes.json()) as { query?: { tokens?: { logintoken?: string } } };
+    const logintoken = tokenData?.query?.tokens?.logintoken;
+    if (!logintoken) return null;
+
+    const params = new URLSearchParams({
+      action: 'login',
+      lgname: user,
+      lgpassword: password,
+      lgtoken: logintoken,
+      format: 'json',
+    });
+    const loginRes = await fetch(COMMONS_API, {
+      method: 'POST',
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+    const loginData = (await loginRes.json()) as { login?: { result?: string } };
+    if (loginData?.login?.result !== 'Success') return null;
+
+    const h = loginRes.headers as Headers & { getSetCookie?(): string[] };
+    const setCookies =
+      typeof h.getSetCookie === 'function'
+        ? h.getSetCookie()
+        : ([loginRes.headers.get('set-cookie'), loginRes.headers.get('Set-Cookie')].filter(Boolean) as string[]);
+    const cookie = setCookies
+      .map((c) => String(c).split(';')[0].trim())
+      .filter(Boolean)
+      .join('; ');
+    if (!cookie) return null;
+
+    cachedCookie = cookie;
+    cacheExpiry = Date.now() + CACHE_TTL_MS;
+    return cookie;
+  } catch {
+    return null;
+  }
+}
+
+function commonsHeaders(cookie: string | null): Record<string, string> {
+  const h: Record<string, string> = { 'User-Agent': USER_AGENT };
+  if (cookie) h['Cookie'] = cookie;
+  return h;
+}
 
 export interface CommonsPage {
   id: number;
@@ -52,13 +121,14 @@ export type ImageForTagResult = ImageForTag | ImageForTagError;
  * Search Commons for pages matching the query.
  */
 export async function searchPages(query: string, limit: number = 5): Promise<CommonsPage[]> {
+  const cookie = await getCommonsAuth();
   const url = new URL('search/page', COMMONS_BASE);
   url.searchParams.set('q', query.trim());
   url.searchParams.set('limit', String(Math.min(limit, 50)));
 
   const res = await fetch(url.toString(), {
     method: 'GET',
-    headers: { 'User-Agent': USER_AGENT },
+    headers: commonsHeaders(cookie),
   });
 
   if (!res.ok) {
@@ -81,10 +151,11 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
   // Commons file endpoint uses underscores for spaces in the path
   const pathTitle = title.replace(/ /g, '_');
   const url = `${COMMONS_BASE}file/${encodeURIComponent(pathTitle)}`;
+  const cookie = await getCommonsAuth();
 
   const res = await fetch(url, {
     method: 'GET',
-    headers: { 'User-Agent': USER_AGENT },
+    headers: commonsHeaders(cookie),
   });
 
   if (!res.ok) {
