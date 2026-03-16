@@ -27,6 +27,7 @@ import {
   getTurnBudget,
   getChunksPlanned,
   getChunkLabels,
+  validateAIResponse,
 } from '../../lib/conceptual-lesson-helpers.js';
 
 const ENDPOINT = 'conceptual-lesson';
@@ -123,18 +124,46 @@ export default async function handler(req: any, res: any) {
       },
     ];
 
-    // --- AI call ---
-    const { responseText, usageMetadata, modelUsed: usedModel } = await processAIRequest(
-      conceptualLessonResponseSchema,
-      systemInstruction,
-      contents,
-      ENDPOINT,
-      student_request,
-      4096,
-    );
-    modelUsed = usedModel;
+    // --- AI call with validation retry ---
+    const MAX_RETRIES = 2;
+    let parsed: any = null;
+    let lastResponseText = '';
+    let lastUsageMetadata: any = null;
 
-    const parsed = JSON.parse(responseText);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const { responseText, usageMetadata, modelUsed: usedModel } = await processAIRequest(
+        conceptualLessonResponseSchema,
+        systemInstruction,
+        contents,
+        ENDPOINT,
+        student_request,
+        4096,
+      );
+      modelUsed = usedModel;
+      lastResponseText = responseText;
+      lastUsageMetadata = usageMetadata;
+
+      let candidate: any;
+      try {
+        candidate = JSON.parse(responseText);
+      } catch {
+        if (attempt === MAX_RETRIES) throw new Error('AI returned malformed JSON after retries');
+        continue;
+      }
+
+      const validation = validateAIResponse(candidate);
+      if (validation.valid) {
+        parsed = candidate;
+        break;
+      }
+
+      console.warn(`[CONCEPTUAL-LESSON /start] Validation failed, attempt ${attempt + 1}`, validation.errors);
+      if (attempt === MAX_RETRIES) {
+        parsed = candidate; // accept anyway
+      }
+    }
+
+    if (!parsed) throw new Error('AI_PROCESSING_FAILED: no valid response after retries');
 
     console.info(`[CONCEPTUAL-LESSON /start] Success`, {
       topic: parsed.lesson_state?.topic,
@@ -150,10 +179,10 @@ export default async function handler(req: any, res: any) {
       userId,
       gradeLevel: Math.max(1, age - 5),
       topic: student_request,
-      responseText,
+      responseText: lastResponseText,
       responseTimeMs: Date.now() - startTime,
       success: true,
-      usageMetadata,
+      usageMetadata: lastUsageMetadata,
       model: modelUsed,
     });
     void flushApiLogger();
