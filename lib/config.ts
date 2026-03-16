@@ -37,6 +37,11 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
     fallback1: MODELS.FLASH_PREVIEW,
     fallback2: MODELS.FLASH_OLD,
   },
+  'conceptual-lesson': {
+    primary: MODELS.FLASH_PREVIEW,
+    fallback1: MODELS.FLASH_OLD,
+    fallback2: MODELS.FLASH_OLD,
+  },
 };
 
 // -----------------------------------------------------------------------------
@@ -46,6 +51,7 @@ export const ROUTE_TEMPERATURES: Record<string, number> = {
   chat: 0.75,
   lesson: 0.9,
   story: 0.9,
+  'conceptual-lesson': 0.7,
 };
 
 // -----------------------------------------------------------------------------
