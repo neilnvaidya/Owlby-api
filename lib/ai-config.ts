@@ -166,7 +166,15 @@ export function buildAIConfig(
   // Gemini 3 models always use temperature 1.0
   const finalTemperature = isGemini3Model(modelName) ? 1.0 : (temperature ?? 0.9);
   
-  if (modelName === MODELS.FLASH_PREVIEW) {
+  if (modelName === MODELS.FLASH_LITE_PREVIEW) {
+    // 3.1 flash-lite preview: treat as Gemini 3 preview config
+    return buildFlashPreviewConfig(
+      responseSchema,
+      systemInstruction,
+      maxOutputTokens,
+      finalTemperature,
+    );
+  } else if (modelName === MODELS.FLASH_PREVIEW) {
     return buildFlashPreviewConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else if (modelName === MODELS.FLASH) {
     return buildFlash3Config(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
