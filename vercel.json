@@ -83,14 +83,6 @@
     {
       "source": "/media/image",
       "destination": "/api/media/image"
-    },
-    {
-      "source": "/conceptual-lesson/start",
-      "destination": "/api/conceptual-lesson/start"
-    },
-    {
-      "source": "/conceptual-lesson/turn",
-      "destination": "/api/conceptual-lesson/turn"
     }
   ]
 }
