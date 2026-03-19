@@ -159,7 +159,9 @@ export default async function handler(req: any, res: any) {
 
       console.warn(`[CONCEPTUAL-LESSON /start] Validation failed, attempt ${attempt + 1}`, validation.errors);
       if (attempt === MAX_RETRIES) {
-        parsed = candidate; // accept anyway
+        throw new Error(
+          `AI returned invalid response after retries: ${validation.errors.join('; ')}`,
+        );
       }
     }
 

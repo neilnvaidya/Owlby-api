@@ -162,9 +162,9 @@ export default async function handler(req: any, res: any) {
 
       console.warn(`[CONCEPTUAL-LESSON /turn] Validation failed, attempt ${attempt + 1}`, validation.errors);
       if (attempt === MAX_RETRIES) {
-        // Accept the response anyway on last retry — better to return something
-        parsed = candidate as ConceptualLessonResponse;
-        console.warn(`[CONCEPTUAL-LESSON /turn] Accepting response despite validation errors`);
+        throw new Error(
+          `AI returned invalid response after retries: ${validation.errors.join('; ')}`,
+        );
       }
     }
 
