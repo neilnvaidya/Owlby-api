@@ -37,6 +37,32 @@ export const ROUTE_MODEL_CONFIG: Record<string, {
     fallback1: MODELS.FLASH_PREVIEW,
     fallback2: MODELS.FLASH_OLD,
   },
+  /** Lesson v3 — one config entry per route (same chain as legacy lesson) */
+  lesson_start: {
+    primary: MODELS.FLASH_LITE_PREVIEW,
+    fallback1: MODELS.FLASH_PREVIEW,
+    fallback2: MODELS.FLASH_OLD,
+  },
+  lesson_objectives: {
+    primary: MODELS.FLASH_LITE_PREVIEW,
+    fallback1: MODELS.FLASH_PREVIEW,
+    fallback2: MODELS.FLASH_OLD,
+  },
+  lesson_chunk: {
+    primary: MODELS.FLASH_LITE_PREVIEW,
+    fallback1: MODELS.FLASH_PREVIEW,
+    fallback2: MODELS.FLASH_OLD,
+  },
+  lesson_evaluate: {
+    primary: MODELS.FLASH_LITE_PREVIEW,
+    fallback1: MODELS.FLASH_PREVIEW,
+    fallback2: MODELS.FLASH_OLD,
+  },
+  lesson_consolidation: {
+    primary: MODELS.FLASH_LITE_PREVIEW,
+    fallback1: MODELS.FLASH_PREVIEW,
+    fallback2: MODELS.FLASH_OLD,
+  },
 };
 
 // -----------------------------------------------------------------------------
@@ -46,6 +72,11 @@ export const ROUTE_TEMPERATURES: Record<string, number> = {
   chat: 0.75,
   lesson: 0.9,
   story: 0.9,
+  lesson_start: 0.85,
+  lesson_objectives: 0.85,
+  lesson_chunk: 0.8,
+  lesson_evaluate: 0.7,
+  lesson_consolidation: 0.8,
 };
 
 // -----------------------------------------------------------------------------

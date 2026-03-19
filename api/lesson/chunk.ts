@@ -1,0 +1,200 @@
+import { flushApiLogger, logLessonV3Call } from '../../lib/api-logger.js';
+import { lessonV3ChunkResponseSchema } from '../../lib/ai-schemas.js';
+import {
+  getLessonV3ChunkInstructions,
+  getLessonV3ChunkMcqFallbackInstructions,
+} from '../../lib/ai-instructions.js';
+import { processAIRequest } from '../../lib/api-handler.js';
+import { runLessonV3WithSchemaRetries } from '../../lib/lesson-v3-ai.js';
+import type { LessonChunkResponseBody, LessonObjectivesState } from '../../lib/lesson-v3-types.js';
+import {
+  parseLessonObjectivesState,
+  validateLessonObjectivesForChunk,
+} from '../../lib/lesson-v3-types.js';
+import {
+  parseChunkResponseJson,
+  validateChunkForAge,
+} from '../../lib/lesson-v3-chunk-validate.js';
+import {
+  getExpectedChunkQuestionType,
+  getMcqOptionCountForChunk,
+} from '../../lib/lesson-age.js';
+import {
+  jsonBadRequest,
+  jsonGenerationError,
+  lessonV3Prelude,
+} from '../../lib/lesson-v3-route-common.js';
+
+async function generateChunk(lo: LessonObjectivesState): Promise<{
+  data: LessonChunkResponseBody;
+  responseText: string;
+  usageMetadata: any;
+  modelUsed: string;
+  fallbackUsed: boolean;
+}> {
+  const loJson = JSON.stringify(lo);
+  const baseInstr = getLessonV3ChunkInstructions(loJson);
+  const contents = [
+    {
+      role: 'user',
+      parts: [{ text: 'Return the chunk JSON for the current objective only.' }],
+    },
+  ];
+  const inputKey = loJson.slice(0, 1500);
+  const age = lo.student_age;
+  const expected = getExpectedChunkQuestionType(age);
+  const n = getMcqOptionCountForChunk(age);
+
+  const parseValid = (text: string) => {
+    const b = parseChunkResponseJson(text);
+    validateChunkForAge(b, age);
+    return b;
+  };
+
+  const run = (instruction: string) =>
+    runLessonV3WithSchemaRetries(
+      'lesson_chunk',
+      lessonV3ChunkResponseSchema,
+      instruction,
+      contents,
+      inputKey,
+      parseValid,
+    );
+
+  try {
+    return await run(baseInstr);
+  } catch {
+    // Part 9.3: one retry with explicit correction
+  }
+
+  const strict =
+    baseInstr +
+    `\n\nCRITICAL CORRECTION: student_age=${age}. question_type MUST be exactly "${expected}".` +
+    (expected === 'mcq'
+      ? ` mcq_options MUST be an array of exactly ${n} strings. correct_answer MUST be identical to one of those strings.`
+      : ' mcq_options MUST be []. correct_answer MUST be null.');
+
+  try {
+    return await run(strict);
+  } catch {
+    // Server-side correction per spec
+  }
+
+  let partial: LessonChunkResponseBody;
+  let lastMeta: any;
+  let lastModel = 'unknown';
+  let lastFb = false;
+  let lastText = '';
+  try {
+    const r = await processAIRequest(
+      lessonV3ChunkResponseSchema,
+      baseInstr,
+      contents,
+      'lesson_chunk',
+      inputKey,
+    );
+    partial = parseChunkResponseJson(r.responseText);
+    lastMeta = r.usageMetadata;
+    lastModel = r.modelUsed;
+    lastFb = r.fallbackUsed;
+    lastText = r.responseText;
+  } catch {
+    throw new Error('LESSON_CHUNK_FAILED');
+  }
+
+  if (expected !== 'mcq') {
+    return {
+      data: {
+        ...partial,
+        question_type: expected,
+        mcq_options: [],
+        correct_answer: null,
+      },
+      responseText: lastText,
+      usageMetadata: lastMeta,
+      modelUsed: lastModel,
+      fallbackUsed: lastFb,
+    };
+  }
+
+  const fbInstr = getLessonV3ChunkMcqFallbackInstructions(
+    partial.content,
+    partial.question,
+    age,
+    n,
+  );
+  const fb = await runLessonV3WithSchemaRetries(
+    'lesson_chunk',
+    lessonV3ChunkResponseSchema,
+    fbInstr,
+    contents,
+    `${inputKey}|mcq-fallback`,
+    parseValid,
+  );
+  return fb;
+}
+
+export default async function handler(req: any, res: any) {
+  const startTime = Date.now();
+  const ctx = await lessonV3Prelude(req, res, {
+    rateLimitKey: 'lesson_v3_chunk',
+    rateLimitMax: 30,
+    rateWindowMs: 60_000,
+  });
+  if (!ctx) return;
+
+  const body = req.body || {};
+  let lo: LessonObjectivesState;
+  try {
+    lo = parseLessonObjectivesState(body.lesson_objectives);
+    validateLessonObjectivesForChunk(lo);
+  } catch (e: any) {
+    return jsonBadRequest(res, e?.message || 'Invalid lesson_objectives.');
+  }
+
+  let modelUsed = 'unknown';
+
+  try {
+    const { data, responseText, usageMetadata, modelUsed: m } =
+      await generateChunk(lo);
+    modelUsed = m;
+
+    logLessonV3Call({
+      userId: ctx.userId,
+      step: 'chunk',
+      studentAge: lo.student_age,
+      inputSummary: lo.topic.slice(0, 120),
+      responseText,
+      responseTimeMs: Date.now() - startTime,
+      success: true,
+      usageMetadata,
+      model: modelUsed,
+    });
+    void flushApiLogger();
+
+    return res.status(200).json({
+      success: true,
+      content: data.content,
+      question: data.question,
+      question_type: data.question_type,
+      mcq_options: data.mcq_options,
+      correct_answer: data.correct_answer,
+    });
+  } catch (err: any) {
+    logLessonV3Call({
+      userId: ctx.userId,
+      step: 'chunk',
+      studentAge: lo.student_age,
+      inputSummary: lo.topic.slice(0, 120),
+      responseTimeMs: Date.now() - startTime,
+      success: false,
+      error: err?.message || 'GenerationFailed',
+      model: modelUsed,
+    });
+    void flushApiLogger();
+    return jsonGenerationError(
+      res,
+      'We could not load this part of the lesson. Please try again.',
+    );
+  }
+}

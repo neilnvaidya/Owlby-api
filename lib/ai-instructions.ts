@@ -1,5 +1,13 @@
 import { gradeToAge, MODELS } from './ai-config.js';
 import { TAGS_OUTPUT_RULES } from './ai-tags.js';
+import {
+  getAgeBandV3,
+  getExpectedChunkQuestionType,
+  getMaxSentencesForContent,
+  getMcqOptionCountForChunk,
+  getMcqOptionCountForConsolidation,
+  getObjectiveCountForAge,
+} from './lesson-age.js';
 
 /**
  * Core AI Instructions for Owlby
@@ -59,7 +67,7 @@ SAFETY & CONTENT RULES:
  */
 export function getChatInstructions(gradeLevel: number, recentContext: string): string {
   const ageYears = gradeToAge(gradeLevel);
-  
+
   return `${BASE_OWLBY_INSTRUCTIONS}
 
 TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years old). These are capable students (grades 2-6, ages 7-12) who can use Google and navigate technology effectively.
@@ -163,6 +171,145 @@ STRUCTURE (keep each item short):
 ${TAGS_OUTPUT_RULES}
 
 Return ONLY the JSON.`;
+}
+
+// ============================================================================
+// LESSON V3 — FIVE ROUTES (spec v3)
+// ============================================================================
+
+export function getLessonV3StartInstructions(studentRequest: string, studentAge: number): string {
+  const band = getAgeBandV3(studentAge);
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+You are generating ONLY the opening of a tutoring lesson (Route 1). Return VALID JSON only with keys: hook, question.
+
+STUDENT_REQUEST: ${studentRequest}
+STUDENT_AGE: ${studentAge} (band: ${band})
+
+RULES:
+- hook: exactly ONE sentence. Surprising, vivid, or counterintuitive fact about the topic. Age-appropriate. NOT a question. Do NOT say "today we will learn" or list lesson structure.
+- question: exactly ONE open-ended prior knowledge question. No multiple choice. Must invite any level of response (including "I don't know"). Do not lead toward one answer. Do not reveal topic facts the student did not give. Natural wording for the age band.
+- If topic is broad ("science"), pick one reasonable narrow interpretation (evident in the hook).
+- If topic is a skill, treat underlying concept for hook/question.
+- Age 5–6 + abstract topic: simplify framing only, same topic.
+
+Return ONLY JSON.`;
+}
+
+export function getLessonV3ObjectivesInstructions(
+  studentRequest: string,
+  studentAge: number,
+  starterResponse: string,
+): string {
+  const n = getObjectiveCountForAge(studentAge);
+  const band = getAgeBandV3(studentAge);
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+You are Route 2: generate lesson_objectives and a bridge_message. Return VALID JSON only (bridge_message + lesson_objectives).
+
+STUDENT_REQUEST: ${studentRequest}
+STUDENT_AGE: ${studentAge} (band: ${band})
+STARTER_RESPONSE (may be empty): ${starterResponse}
+
+RULES:
+- Generate EXACTLY ${n} objectives — no fewer, no more.
+- Each objective: one sentence starting with a verb (Explain, Describe, Identify, Apply, Analyse...). Testable and specific. Sequenced so each builds on the prior.
+- Assess starter: blank/off-topic = knows nothing; adjust depth but NOT count of objectives.
+- bridge_message: 1–2 sentences. Acknowledge starter briefly and naturally. Do NOT list objectives. Do NOT quote student verbatim.
+- lesson_objectives.student_age: ${studentAge}
+- lesson_objectives.topic: short phrase from student_request (fix typos only; same subject).
+- lesson_objectives.current_index: 0
+- First objective: status "current", note null. Others: status "pending", note null.
+
+Return ONLY JSON.`;
+}
+
+export function getLessonV3ChunkInstructions(lessonObjectivesJson: string): string {
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+You are Route 3: teach the CURRENT objective only. Return VALID JSON: content, question, question_type, mcq_options, correct_answer.
+
+LESSON_OBJECTIVES (authoritative):
+${lessonObjectivesJson}
+
+RULES:
+- Read objectives[current_index] — that is the ONLY objective to teach and test.
+- content: teaching for that objective only. Max sentences by age: Young 2, Middle 3, Older 4, Senior 5 (see student_age in JSON). Do not answer the question in the content.
+- question: one question testing ONLY that objective.
+- question_type MUST follow age: ages 5–11 → "mcq"; 12–15 → "short_answer"; 16–18 → "higher_order".
+- If mcq: mcq_options length exactly 2 (ages 5–7) or 3 (ages 8–11). correct_answer must equal one option exactly. No "all/none of the above".
+- If not mcq: mcq_options [], correct_answer null.
+- short_answer: answerable in 1–3 sentences, clear correct answer.
+- higher_order: requires reasoning (apply/analyse/infer/evaluate), not recall-only.
+
+Return ONLY JSON.`;
+}
+
+export function getLessonV3ChunkMcqFallbackInstructions(
+  content: string,
+  question: string,
+  studentAge: number,
+  optionCount: number,
+): string {
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+The model returned the wrong question type for age ${studentAge}. You MUST return ONLY a valid MCQ for the same teaching content and question intent.
+
+CONTENT (keep consistent):
+${content}
+
+QUESTION (may rephrase slightly if needed for MCQ):
+${question}
+
+RULES:
+- question_type: "mcq"
+- mcq_options: exactly ${optionCount} distinct strings
+- correct_answer: must be one of mcq_options
+- content and question in output should match the task (content can be the same as above)
+Return JSON with content, question, question_type, mcq_options, correct_answer.`;
+}
+
+export function getLessonV3EvaluateInstructions(
+  lessonObjectivesJson: string,
+  question: string,
+  questionType: 'short_answer' | 'higher_order',
+  studentAnswer: string,
+): string {
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+You are Route 4: evaluate a free-text answer. Return VALID JSON: result, feedback, note.
+
+LESSON_OBJECTIVES:
+${lessonObjectivesJson}
+
+QUESTION: ${question}
+QUESTION_TYPE: ${questionType}
+STUDENT_ANSWER: ${studentAnswer}
+
+RULES:
+- result: "correct" | "partial" | "incorrect"
+- feedback: 1–2 sentences only. If incorrect: do NOT say "wrong/incorrect/no". State correct answer in one sentence and move on. Age-appropriate tone.
+- note: ONE sentence, specific to THIS response (not generic). Blank answer → note exactly: "Blank response — objective not assessed." and incorrect result.
+
+Return ONLY JSON.`;
+}
+
+export function getLessonV3ConsolidationInstructions(lessonObjectivesJson: string): string {
+  return `${BASE_OWLBY_INSTRUCTIONS}
+
+You are Route 5: consolidation. Return VALID JSON: mcq_sweep, explain_back_prompt, closing_message, lesson_complete (must be true).
+
+LESSON_OBJECTIVES (all complete):
+${lessonObjectivesJson}
+
+RULES:
+- mcq_sweep: one object per objective IN ORDER. Each: question, options (length 2 if student_age 5–7 else 3), correct_answer in options, explanation (one sentence after answer).
+- Each MCQ tests that objective; different wording from chunk; use objective note to target weaknesses.
+- explain_back_prompt: one sentence, age-appropriate (Young: simple; Middle: standard; Older/Senior: add structure nudge per spec).
+- closing_message: 1–2 sentences; name ONE specific strength from notes; warm/final; no new content.
+- lesson_complete: true
+
+Return ONLY JSON.`;
 }
 
 // ============================================================================

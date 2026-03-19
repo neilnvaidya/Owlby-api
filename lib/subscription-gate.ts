@@ -12,6 +12,7 @@ const FREE_TIER_STORY_LIMIT = Number(process.env.FREE_TIER_STORY_LIMIT ?? 5);
 const GATE_TIMEOUT_MS = 4000;
 
 export type SubscriptionTier = 'premium' | 'early_adopter' | 'free';
+/** All lesson v3 routes use `lesson` for gating (see canGenerate(userId, 'lesson')). */
 export type RouteType = 'chat' | 'lesson' | 'story';
 
 export interface GateResult {

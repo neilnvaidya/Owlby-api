@@ -107,6 +107,101 @@ export const lessonResponseSchema = {
   },
 } as const;
 
+// =============================================================================
+// Lesson System v3 — five-route schemas (Part 8)
+// =============================================================================
+
+export const lessonV3StartResponseSchema = {
+  type: Type.OBJECT,
+  required: ['hook', 'question'],
+  properties: {
+    hook: { type: Type.STRING, description: 'One vivid hook sentence, not a question' },
+    question: { type: Type.STRING, description: 'Open-ended prior knowledge question' },
+  },
+} as const;
+
+const lessonV3ObjectiveEntrySchema = {
+  type: Type.OBJECT,
+  required: ['title', 'status', 'note'],
+  properties: {
+    title: { type: Type.STRING },
+    status: { type: Type.STRING, enum: ['pending', 'current', 'complete'] },
+    note: { type: Type.STRING, nullable: true },
+  },
+};
+
+const lessonV3ObjectivesStateSchema = {
+  type: Type.OBJECT,
+  required: ['student_age', 'topic', 'objectives', 'current_index'],
+  properties: {
+    student_age: { type: Type.INTEGER },
+    topic: { type: Type.STRING },
+    current_index: { type: Type.INTEGER },
+    objectives: {
+      type: Type.ARRAY,
+      items: lessonV3ObjectiveEntrySchema,
+      minItems: 1,
+      maxItems: 4,
+    },
+  },
+};
+
+export const lessonV3ObjectivesResponseSchema = {
+  type: Type.OBJECT,
+  required: ['bridge_message', 'lesson_objectives'],
+  properties: {
+    bridge_message: { type: Type.STRING },
+    lesson_objectives: lessonV3ObjectivesStateSchema,
+  },
+} as const;
+
+export const lessonV3ChunkResponseSchema = {
+  type: Type.OBJECT,
+  required: ['content', 'question', 'question_type', 'mcq_options', 'correct_answer'],
+  properties: {
+    content: { type: Type.STRING },
+    question: { type: Type.STRING },
+    question_type: {
+      type: Type.STRING,
+      enum: ['mcq', 'short_answer', 'higher_order'],
+    },
+    mcq_options: { type: Type.ARRAY, items: { type: Type.STRING } },
+    correct_answer: { type: Type.STRING, nullable: true },
+  },
+} as const;
+
+export const lessonV3EvaluateResponseSchema = {
+  type: Type.OBJECT,
+  required: ['result', 'feedback', 'note'],
+  properties: {
+    result: { type: Type.STRING, enum: ['correct', 'partial', 'incorrect'] },
+    feedback: { type: Type.STRING },
+    note: { type: Type.STRING },
+  },
+} as const;
+
+const lessonV3ConsolidationMcqItemSchema = {
+  type: Type.OBJECT,
+  required: ['question', 'options', 'correct_answer', 'explanation'],
+  properties: {
+    question: { type: Type.STRING },
+    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+    correct_answer: { type: Type.STRING },
+    explanation: { type: Type.STRING },
+  },
+};
+
+export const lessonV3ConsolidationResponseSchema = {
+  type: Type.OBJECT,
+  required: ['mcq_sweep', 'explain_back_prompt', 'closing_message', 'lesson_complete'],
+  properties: {
+    mcq_sweep: { type: Type.ARRAY, items: lessonV3ConsolidationMcqItemSchema },
+    explain_back_prompt: { type: Type.STRING },
+    closing_message: { type: Type.STRING },
+    lesson_complete: { type: Type.BOOLEAN },
+  },
+} as const;
+
 /**
  * Story response schema for narrative content generation
  */

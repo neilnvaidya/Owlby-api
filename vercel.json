@@ -45,6 +45,26 @@
       "destination": "/api/learn/generate-lesson"
     },
     {
+      "source": "/lesson/start",
+      "destination": "/api/lesson/start"
+    },
+    {
+      "source": "/lesson/objectives",
+      "destination": "/api/lesson/objectives"
+    },
+    {
+      "source": "/lesson/chunk",
+      "destination": "/api/lesson/chunk"
+    },
+    {
+      "source": "/lesson/evaluate",
+      "destination": "/api/lesson/evaluate"
+    },
+    {
+      "source": "/lesson/consolidation",
+      "destination": "/api/lesson/consolidation"
+    },
+    {
       "source": "/chat/response",
       "destination": "/api/chat/generate-response"
     },

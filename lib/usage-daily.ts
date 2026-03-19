@@ -11,6 +11,10 @@ type Route = 'chat' | 'lesson' | 'story';
 
 /**
  * Increment the daily usage counter for the given route.
+ *
+ * Lesson v3: `lesson` is incremented once per session on POST /api/lesson/start only
+ * (see api/lesson/start.ts). Chunk/evaluate/consolidation/objectives do not increment,
+ * so one interactive lesson still counts as one "lesson" for free-tier limits.
  * Uses the `increment_daily_usage` RPC (atomic upsert, no race conditions).
  * Must be awaited so the request runs before the serverless runtime freezes
  * (fire-and-forget caused "fetch failed" after response was sent).

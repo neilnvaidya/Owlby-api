@@ -341,6 +341,32 @@ export const logChatCall = (data: {
       ...data
     });
   };
+
+  /** Lesson v3 — logs under route `lesson` with step prefix for filtering */
+  export const logLessonV3Call = (data: {
+    userId?: string;
+    step: 'start' | 'objectives' | 'chunk' | 'evaluate' | 'consolidation';
+    studentAge: number;
+    inputSummary: string;
+    responseText?: string;
+    responseTimeMs: number;
+    success: boolean;
+    error?: string;
+    usageMetadata?: any;
+    model: string;
+  }) => {
+    return logLessonCall({
+      userId: data.userId,
+      gradeLevel: data.studentAge,
+      topic: `[v3/${data.step}] ${data.inputSummary}`,
+      responseText: data.responseText,
+      responseTimeMs: data.responseTimeMs,
+      success: data.success,
+      error: data.error,
+      usageMetadata: data.usageMetadata,
+      model: data.model,
+    });
+  };
   
   export const logStoryCall = (data: {
     userId?: string;
