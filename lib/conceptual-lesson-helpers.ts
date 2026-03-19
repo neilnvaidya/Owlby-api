@@ -112,6 +112,70 @@ export function shouldSkipM5(age: number): boolean {
 // Response validation (spec section 11)
 // ---------------------------------------------------------------------------
 
+function coerceToStringArray(value: unknown): string[] | null {
+  if (value == null) return null;
+
+  if (Array.isArray(value)) {
+    const out: string[] = [];
+    for (const item of value) {
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (trimmed) out.push(trimmed);
+      } else if (item != null) {
+        const s = String(item).trim();
+        if (s) out.push(s);
+      }
+    }
+    return out;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    // Try parsing JSON array strings first: '["A","B"]'
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return coerceToStringArray(parsed) ?? [];
+      } catch {
+        // fall through to separator parsing
+      }
+    }
+
+    // Fallback: split by common separators.
+    return trimmed
+      .split(/\n|,|;|\u2022|- /g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'object') {
+    const maybeObj: any = value as any;
+    if (Array.isArray(maybeObj.options)) return coerceToStringArray(maybeObj.options) ?? [];
+    if (Array.isArray(maybeObj.mcq_options)) return coerceToStringArray(maybeObj.mcq_options) ?? [];
+  }
+
+  return null;
+}
+
+export function normalizeConceptualLessonResponse(
+  response: any,
+  previousState?: ConceptualLessonState,
+): any {
+  if (!response || typeof response !== 'object') return response;
+
+  // Spec: mcq_options should be an array when question_type is "mcq"
+  if (response.question_type === 'mcq') {
+    const coerced = coerceToStringArray(response.mcq_options);
+    if (coerced !== null) {
+      response.mcq_options = coerced;
+    }
+  }
+
+  return response;
+}
+
 const VALID_BEAT_IDS_SET = new Set([
   'S1', 'S2', 'S3', 'M1', 'M2', 'M3', 'M4', 'M5', 'MQ', 'M6', 'C1', 'C2', 'C3',
 ]);
