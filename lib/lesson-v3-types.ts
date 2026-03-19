@@ -8,6 +8,7 @@ export type ChunkQuestionType = 'mcq' | 'short_answer' | 'higher_order';
 
 export interface LessonObjectiveEntry {
   title: string;
+  key_facts: string[];
   status: ObjectiveStatus;
   note: string | null;
 }
@@ -48,7 +49,15 @@ export interface LessonChunkRequestBody {
 }
 
 export interface LessonChunkResponseBody {
-  content: string;
+  content: string; // combined teaching content for the current objective
+  learning_points: string[]; // one concise point per key fact
+  questions: Array<{
+    question: string;
+    question_type: ChunkQuestionType;
+    mcq_options: string[];
+    correct_answer: string | null;
+  }>;
+  // Backward-compatible first-question fields
   question: string;
   question_type: ChunkQuestionType;
   mcq_options: string[];
@@ -121,6 +130,13 @@ export function parseLessonObjectivesState(raw: unknown): LessonObjectivesState 
     }
     const e = item as Record<string, unknown>;
     const title = assertNonEmptyString(e.title, `objectives[${i}].title`);
+    const keyFactsRaw = e.key_facts;
+    if (!Array.isArray(keyFactsRaw) || keyFactsRaw.length < 2 || keyFactsRaw.length > 6) {
+      throw new Error(`objectives[${i}].key_facts must have 2–6 entries`);
+    }
+    const key_facts = keyFactsRaw.map((fact, j) =>
+      assertNonEmptyString(fact, `objectives[${i}].key_facts[${j}]`),
+    );
     const status = e.status;
     if (status !== 'pending' && status !== 'current' && status !== 'complete') {
       throw new Error(`objectives[${i}].status invalid`);
@@ -132,7 +148,7 @@ export function parseLessonObjectivesState(raw: unknown): LessonObjectivesState 
         : (() => {
             throw new Error(`objectives[${i}].note must be string or null`);
           })();
-    return { title, status, note };
+    return { title, key_facts, status, note };
   });
   return { student_age, topic, objectives: entries, current_index };
 }

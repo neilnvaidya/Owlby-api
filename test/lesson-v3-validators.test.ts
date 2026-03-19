@@ -12,8 +12,8 @@ describe('lesson v3 validators', () => {
       topic: 'Photosynthesis',
       current_index: 0,
       objectives: [
-        { title: 'Explain X', status: 'current', note: null },
-        { title: 'Describe Y', status: 'pending', note: null },
+        { title: 'Explain X', key_facts: ['Fact 1', 'Fact 2'], status: 'current', note: null },
+        { title: 'Describe Y', key_facts: ['Fact 3', 'Fact 4'], status: 'pending', note: null },
       ],
     });
     return { ...base, ...over };
@@ -24,8 +24,8 @@ describe('lesson v3 validators', () => {
     expect(() => validateLessonObjectivesForChunk(lo)).not.toThrow();
     const bad = validLo({
       objectives: [
-        { title: 'A', status: 'current', note: null },
-        { title: 'B', status: 'current', note: null },
+        { title: 'A', key_facts: ['a1', 'a2'], status: 'current', note: null },
+        { title: 'B', key_facts: ['b1', 'b2'], status: 'current', note: null },
       ],
     });
     expect(() => validateLessonObjectivesForChunk(bad)).toThrow();
@@ -36,7 +36,7 @@ describe('lesson v3 validators', () => {
       student_age: 7,
       topic: 'T',
       current_index: 1,
-      objectives: [{ title: 'A', status: 'complete', note: 'n' }],
+      objectives: [{ title: 'A', key_facts: ['a1', 'a2'], status: 'complete', note: 'n' }],
     });
     expect(() => validateLessonObjectivesForConsolidation(one)).toThrow();
   });
@@ -47,8 +47,8 @@ describe('lesson v3 validators', () => {
       topic: 'T',
       current_index: 2,
       objectives: [
-        { title: 'A', status: 'complete', note: 'n1' },
-        { title: 'B', status: 'complete', note: 'n2' },
+        { title: 'A', key_facts: ['a1', 'a2'], status: 'complete', note: 'n1' },
+        { title: 'B', key_facts: ['b1', 'b2'], status: 'complete', note: 'n2' },
       ],
     });
     expect(() => validateLessonObjectivesForConsolidation(lo)).not.toThrow();
@@ -60,8 +60,8 @@ describe('lesson v3 validators', () => {
       topic: 'T',
       current_index: 0,
       objectives: [
-        { title: 'A', status: 'current', note: null },
-        { title: 'B', status: 'pending', note: null },
+        { title: 'A', key_facts: ['a1', 'a2'], status: 'current', note: null },
+        { title: 'B', key_facts: ['b1', 'b2'], status: 'pending', note: null },
       ],
     });
     expect(() => validateLessonObjectivesAfterRoute2(lo, 2, 10)).not.toThrow();

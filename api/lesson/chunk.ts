@@ -37,7 +37,7 @@ async function generateChunk(lo: LessonObjectivesState): Promise<{
   const contents = [
     {
       role: 'user',
-      parts: [{ text: 'Return the chunk JSON for the current objective only.' }],
+      parts: [{ text: 'Return chunk JSON for current objective with learning_points and one question per point.' }],
     },
   ];
   const inputKey = loJson.slice(0, 1500);
@@ -103,12 +103,20 @@ async function generateChunk(lo: LessonObjectivesState): Promise<{
   }
 
   if (expected !== 'mcq') {
+    const normalizedQuestions = partial.questions.map((q) => ({
+      ...q,
+      question_type: expected,
+      mcq_options: [],
+      correct_answer: null,
+    }));
     return {
       data: {
         ...partial,
-        question_type: expected,
-        mcq_options: [],
-        correct_answer: null,
+        questions: normalizedQuestions,
+        question: normalizedQuestions[0].question,
+        question_type: normalizedQuestions[0].question_type,
+        mcq_options: normalizedQuestions[0].mcq_options,
+        correct_answer: normalizedQuestions[0].correct_answer,
       },
       responseText: lastText,
       usageMetadata: lastMeta,
@@ -119,7 +127,8 @@ async function generateChunk(lo: LessonObjectivesState): Promise<{
 
   const fbInstr = getLessonV3ChunkMcqFallbackInstructions(
     partial.content,
-    partial.question,
+    partial.learning_points,
+    partial.questions.map((q) => q.question),
     age,
     n,
   );
@@ -175,6 +184,8 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       success: true,
       content: data.content,
+      learning_points: data.learning_points,
+      questions: data.questions,
       question: data.question,
       question_type: data.question_type,
       mcq_options: data.mcq_options,

@@ -2,10 +2,6 @@ import { gradeToAge, MODELS } from './ai-config.js';
 import { TAGS_OUTPUT_RULES } from './ai-tags.js';
 import {
   getAgeBandV3,
-  getExpectedChunkQuestionType,
-  getMaxSentencesForContent,
-  getMcqOptionCountForChunk,
-  getMcqOptionCountForConsolidation,
   getObjectiveCountForAge,
 } from './lesson-age.js';
 
@@ -214,6 +210,9 @@ STARTER_RESPONSE (may be empty): ${starterResponse}
 RULES:
 - Generate EXACTLY ${n} objectives — no fewer, no more.
 - Each objective: one sentence starting with a verb (Explain, Describe, Identify, Apply, Analyse...). Testable and specific. Sequenced so each builds on the prior.
+- Each objective MUST include key_facts: an array of 2–6 concise fact strings that this objective will explicitly teach.
+- key_facts must be concrete and learner-facing (real details, places, examples, mechanisms), not vague labels.
+- For broad topics (e.g., "Africa"), distribute key_facts across meaningful coverage such as definition/category, people/life, geography/size, nature/wildlife, and notable landmarks/features.
 - Assess starter: blank/off-topic = knows nothing; adjust depth but NOT count of objectives.
 - bridge_message: 1–2 sentences. Acknowledge starter briefly and naturally. Do NOT list objectives. Do NOT quote student verbatim.
 - lesson_objectives.student_age: ${studentAge}
@@ -227,30 +226,48 @@ Return ONLY JSON.`;
 export function getLessonV3ChunkInstructions(lessonObjectivesJson: string): string {
   return `${BASE_OWLBY_INSTRUCTIONS}
 
-You are Route 3: teach the CURRENT objective only. Return VALID JSON: content, question, question_type, mcq_options, correct_answer.
+You are Route 3: teach the CURRENT objective only. Return VALID JSON with:
+- content
+- learning_points
+- questions
+- question
+- question_type
+- mcq_options
+- correct_answer
 
 LESSON_OBJECTIVES (authoritative):
 ${lessonObjectivesJson}
 
 RULES:
 - Read objectives[current_index] — that is the ONLY objective to teach and test.
-- content: teaching for that objective only. Max sentences by age: Young 2, Middle 3, Older 4, Senior 5 (see student_age in JSON). Do not answer the question in the content.
-- question: one question testing ONLY that objective.
-- question_type MUST follow age: ages 5–11 → "mcq"; 12–15 → "short_answer"; 16–18 → "higher_order".
-- If mcq: mcq_options length exactly 2 (ages 5–7) or 3 (ages 8–11). correct_answer must equal one option exactly. No "all/none of the above".
-- If not mcq: mcq_options [], correct_answer null.
+- Use the current objective's key_facts as the teaching spine.
+- content: teach the full current objective in one cohesive explanation. Max sentences by age: Young 2, Middle 3, Older 4, Senior 5 (see student_age in JSON).
+- learning_points: array with one concise point per key_fact (same count/order as key_facts).
+- questions: array with exactly one question per learning_point, in the same order.
+- Every questions[i] must test learning_points[i] specifically (not a generic objective-level question).
+- questions[i].question_type MUST follow age: ages 5–11 → "mcq"; 12–15 → "short_answer"; 16–18 → "higher_order".
+- If mcq: questions[i].mcq_options length exactly 2 (ages 5–7) or 3 (ages 8–11). questions[i].correct_answer must equal one option exactly. No "all/none of the above".
+- If not mcq: questions[i].mcq_options [], questions[i].correct_answer null.
 - short_answer: answerable in 1–3 sentences, clear correct answer.
 - higher_order: requires reasoning (apply/analyse/infer/evaluate), not recall-only.
+- Backward compatibility fields:
+  - question = questions[0].question
+  - question_type = questions[0].question_type
+  - mcq_options = questions[0].mcq_options
+  - correct_answer = questions[0].correct_answer
 
 Return ONLY JSON.`;
 }
 
 export function getLessonV3ChunkMcqFallbackInstructions(
   content: string,
-  question: string,
+  learningPoints: string[],
+  questions: string[],
   studentAge: number,
   optionCount: number,
 ): string {
+  const safeLearningPoints = learningPoints.slice(0, 6);
+  const safeQuestions = questions.slice(0, 6);
   return `${BASE_OWLBY_INSTRUCTIONS}
 
 The model returned the wrong question type for age ${studentAge}. You MUST return ONLY a valid MCQ for the same teaching content and question intent.
@@ -258,15 +275,27 @@ The model returned the wrong question type for age ${studentAge}. You MUST retur
 CONTENT (keep consistent):
 ${content}
 
-QUESTION (may rephrase slightly if needed for MCQ):
-${question}
+LEARNING_POINTS (keep count/order):
+${JSON.stringify(safeLearningPoints)}
+
+QUESTIONS (may rephrase slightly for MCQ, keep count/order):
+${JSON.stringify(safeQuestions)}
 
 RULES:
-- question_type: "mcq"
-- mcq_options: exactly ${optionCount} distinct strings
-- correct_answer: must be one of mcq_options
-- content and question in output should match the task (content can be the same as above)
-Return JSON with content, question, question_type, mcq_options, correct_answer.`;
+- Return full chunk JSON with keys:
+  content, learning_points, questions, question, question_type, mcq_options, correct_answer
+- Keep learning_points length unchanged.
+- questions length MUST equal learning_points length.
+- For EVERY questions[i]:
+  - question_type: "mcq"
+  - mcq_options: exactly ${optionCount} distinct strings
+  - correct_answer: must be one of mcq_options
+- Backward-compatible fields must mirror questions[0]:
+  - question = questions[0].question
+  - question_type = "mcq"
+  - mcq_options = questions[0].mcq_options
+  - correct_answer = questions[0].correct_answer
+Return ONLY JSON.`;
 }
 
 export function getLessonV3EvaluateInstructions(

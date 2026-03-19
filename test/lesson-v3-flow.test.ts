@@ -2,7 +2,7 @@ import { getObjectiveCountForAge, getExpectedChunkQuestionType } from '../lib/le
 
 describe('lesson v3 age rules', () => {
   it('objective counts by age', () => {
-    expect(getObjectiveCountForAge(6)).toBe(1);
+    expect(getObjectiveCountForAge(6)).toBe(2);
     expect(getObjectiveCountForAge(9)).toBe(2);
     expect(getObjectiveCountForAge(14)).toBe(3);
     expect(getObjectiveCountForAge(17)).toBe(4);

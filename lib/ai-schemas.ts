@@ -122,9 +122,15 @@ export const lessonV3StartResponseSchema = {
 
 const lessonV3ObjectiveEntrySchema = {
   type: Type.OBJECT,
-  required: ['title', 'status', 'note'],
+  required: ['title', 'key_facts', 'status', 'note'],
   properties: {
     title: { type: Type.STRING },
+    key_facts: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      minItems: 2,
+      maxItems: 6,
+    },
     status: { type: Type.STRING, enum: ['pending', 'current', 'complete'] },
     note: { type: Type.STRING, nullable: true },
   },
@@ -157,9 +163,36 @@ export const lessonV3ObjectivesResponseSchema = {
 
 export const lessonV3ChunkResponseSchema = {
   type: Type.OBJECT,
-  required: ['content', 'question', 'question_type', 'mcq_options', 'correct_answer'],
+  required: [
+    'content',
+    'learning_points',
+    'questions',
+    'question',
+    'question_type',
+    'mcq_options',
+    'correct_answer',
+  ],
   properties: {
     content: { type: Type.STRING },
+    learning_points: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 2, maxItems: 6 },
+    questions: {
+      type: Type.ARRAY,
+      minItems: 2,
+      maxItems: 6,
+      items: {
+        type: Type.OBJECT,
+        required: ['question', 'question_type', 'mcq_options', 'correct_answer'],
+        properties: {
+          question: { type: Type.STRING },
+          question_type: {
+            type: Type.STRING,
+            enum: ['mcq', 'short_answer', 'higher_order'],
+          },
+          mcq_options: { type: Type.ARRAY, items: { type: Type.STRING } },
+          correct_answer: { type: Type.STRING, nullable: true },
+        },
+      },
+    },
     question: { type: Type.STRING },
     question_type: {
       type: Type.STRING,

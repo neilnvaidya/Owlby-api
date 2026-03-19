@@ -16,7 +16,7 @@ export function getObjectiveCountForAge(age: number): number {
   const band = getAgeBandV3(age);
   switch (band) {
     case '5-7':
-      return 1;
+      return 2;
     case '8-11':
       return 2;
     case '12-15':
