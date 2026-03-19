@@ -190,6 +190,22 @@ export default async function handler(req: any, res: any) {
 
       console.warn(`[CONCEPTUAL-LESSON /turn] Validation failed, attempt ${attempt + 1}`, validation.errors);
       if (attempt === MAX_RETRIES) {
+        const mcqErrorsOnly =
+          candidate?.question_type === 'mcq' &&
+          validation.errors.length > 0 &&
+          validation.errors.every((e) => e.includes('mcq_options'));
+
+        if (mcqErrorsOnly) {
+          // Recovery mode: if the model failed only MCQ options shape/count checks,
+          // return anyway so the app can fall back to free-text input.
+          if (!Array.isArray(normalized.mcq_options)) {
+            normalized.mcq_options = [];
+          }
+          parsed = normalized as ConceptualLessonResponse;
+          console.warn('[CONCEPTUAL-LESSON /turn] Recovering with empty mcq_options');
+          break;
+        }
+
         throw new Error(
           `AI returned invalid response after retries: ${validation.errors.join('; ')}`,
         );
