@@ -26,7 +26,6 @@ import {
 import {
   formatConversationForGemini,
   isBudgetExhausted,
-  validateAIResponse,
 } from '../../lib/conceptual-lesson-helpers.js';
 
 const ENDPOINT = 'conceptual-lesson';
@@ -126,49 +125,18 @@ export default async function handler(req: any, res: any) {
       effectiveStudentResponse,
     );
 
-    // --- AI call with validation retry (max 2 retries) ---
-    const MAX_RETRIES = 2;
-    let parsed: ConceptualLessonResponse | null = null;
-    let lastResponseText = '';
-    let lastUsageMetadata: any = null;
+    // --- AI call ---
+    const { responseText, usageMetadata, modelUsed: usedModel } = await processAIRequest(
+      conceptualLessonResponseSchema,
+      systemInstruction,
+      contents,
+      ENDPOINT,
+      effectiveStudentResponse,
+      4096,
+    );
+    modelUsed = usedModel;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const { responseText, usageMetadata, modelUsed: usedModel } = await processAIRequest(
-        conceptualLessonResponseSchema,
-        systemInstruction,
-        contents,
-        ENDPOINT,
-        effectiveStudentResponse,
-        4096,
-      );
-      modelUsed = usedModel;
-      lastResponseText = responseText;
-      lastUsageMetadata = usageMetadata;
-
-      let candidate: any;
-      try {
-        candidate = JSON.parse(responseText);
-      } catch {
-        console.warn(`[CONCEPTUAL-LESSON /turn] Malformed JSON, attempt ${attempt + 1}`);
-        if (attempt === MAX_RETRIES) throw new Error('AI returned malformed JSON after retries');
-        continue;
-      }
-
-      const validation = validateAIResponse(candidate, lesson_state as ConceptualLessonState);
-      if (validation.valid) {
-        parsed = candidate as ConceptualLessonResponse;
-        break;
-      }
-
-      console.warn(`[CONCEPTUAL-LESSON /turn] Validation failed, attempt ${attempt + 1}`, validation.errors);
-      if (attempt === MAX_RETRIES) {
-        // Accept the response anyway on last retry — better to return something
-        parsed = candidate as ConceptualLessonResponse;
-        console.warn(`[CONCEPTUAL-LESSON /turn] Accepting response despite validation errors`);
-      }
-    }
-
-    if (!parsed) throw new Error('AI_PROCESSING_FAILED: no valid response after retries');
+    const parsed: ConceptualLessonResponse = JSON.parse(responseText);
 
     console.info(`[CONCEPTUAL-LESSON /turn] Success`, {
       beatIn: lesson_state.beat,
@@ -185,10 +153,10 @@ export default async function handler(req: any, res: any) {
       userId,
       gradeLevel: Math.max(1, effectiveState.student_age - 5),
       topic: effectiveState.topic,
-      responseText: lastResponseText,
+      responseText,
       responseTimeMs: Date.now() - startTime,
       success: true,
-      usageMetadata: lastUsageMetadata,
+      usageMetadata,
       model: modelUsed,
     });
     void flushApiLogger();
