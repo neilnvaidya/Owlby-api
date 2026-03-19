@@ -30,7 +30,7 @@ function ageBandRules(age: number): string {
   return `
 AGE BAND RULES (student is ${age} years old, band ${band}):
 - Sentence limit per chunk delivery (M1 preamble): ${limits.min}–${limits.max} sentences.
-- MCQ options when question_type = "mcq": ${age <= 11 ? ('exactly ' + mcq.min + ' options') : (mcq.min + '–' + mcq.max + ' options')}.
+- MCQ options when question_type = "mcq": ${mcq.min}–${mcq.max} options.
 - Language must be age-appropriate for a ${age}-year-old.
 ${age <= 7 ? '- Use simple words and short sentences. Be very warm and encouraging.' : ''}
 ${age >= 8 && age <= 11 ? '- Clear language. Concrete examples. Keep it engaging.' : ''}
@@ -188,8 +188,7 @@ M2 RECALL CHECK-IN (the question of this response):
 - Ask ONE recall question testing only what you just delivered in M1.
 - Rephrase — use different words from the explanation.
 - Must NOT contain the answer.
-- Age <= 7: question_type = "mcq" with exactly 2 options.
-- Age 8–11: question_type = "mcq" with exactly 3 options.
+- Age <= 11: question_type = "mcq" with ${mcq.min}–${mcq.max} options.
 - Age >= 12: question_type = "free_text".
 
 SET IN RESPONSE:
@@ -338,13 +337,7 @@ If budget NOT exhausted AND next chunk exists (chunk_index < ${lessonState.chunk
   ${nextChunk ? `Next chunk: "${nextChunk}" (${nextChunkLabel})` : ''}
   ${nextChunk === 'how_it_works' && lessonState.misconception ? '- Challenge the misconception here: "A lot of people think [misconception] — here\'s why that\'s not quite right."' : ''}
 - Set beat_id to "M2", lesson_state.beat to "M2", lesson_state.phase to "main".
-- MCQ rules for M2: ${
-    age <= 7
-      ? 'question_type = "mcq" with exactly 2 options'
-      : age <= 11
-        ? 'question_type = "mcq" with exactly 3 options'
-        : 'question_type = "free_text"'
-  }.
+- MCQ rules for M2: ${age <= 11 ? `question_type = "mcq" with ${mcq.min}–${mcq.max} options` : 'question_type = "free_text"'}.
 
 If budget NOT exhausted AND last chunk just completed:
 - Add current chunk to chunks_completed.
@@ -420,7 +413,7 @@ Branch: Very incomplete (two or more criteria missing):
 - One MCQ at a time — never as a numbered list.
 - Total questions: one per chunk in chunks_completed (${chunksCompleted.length} total).
 - question_type: always "mcq".
-- MCQ options: ${age <= 7 ? ('exactly ' + mcq.min + ' options') : age <= 11 ? ('exactly ' + mcq.min + ' options') : (mcq.min + '–' + mcq.max + ' options')}.
+- MCQ options: ${mcq.min}–${mcq.max} options.
 
 Question types across the sweep in priority order:
 1. One recall question per completed chunk.

@@ -179,35 +179,8 @@ export function validateAIResponse(
 
   // MCQ validation
   if (response.question_type === 'mcq') {
-    if (!Array.isArray(response.mcq_options)) {
-      errors.push('mcq_options must be an array when question_type is mcq');
-    } else {
-      const age = previousState?.student_age;
-
-      // Spec: option counts are age-band strict for younger students.
-      //  - age 5–7: exactly 2 options
-      //  - age 8–11: exactly 3 options
-      //  - age >=12: 3–4 options
-      const expectedStrict =
-        age !== undefined
-          ? age <= 7
-            ? 2
-            : age <= 11
-              ? 3
-              : null
-          : null;
-
-      if (expectedStrict !== null) {
-        if (response.mcq_options.length !== expectedStrict) {
-          errors.push(
-            `mcq_options must have exactly ${expectedStrict} items for age ${age}`,
-          );
-        }
-      } else {
-        if (response.mcq_options.length < 3 || response.mcq_options.length > 4) {
-          errors.push('mcq_options must have 3-4 items for age >= 12');
-        }
-      }
+    if (!Array.isArray(response.mcq_options) || response.mcq_options.length < 2 || response.mcq_options.length > 4) {
+      errors.push(`mcq_options must have 2-4 items when question_type is mcq`);
     }
   }
 
