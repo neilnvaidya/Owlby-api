@@ -167,9 +167,30 @@ export function normalizeConceptualLessonResponse(
 
   // Spec: mcq_options should be an array when question_type is "mcq"
   if (response.question_type === 'mcq') {
+    // Gemini structured output sometimes omits conditionally required fields.
+    // For MCQ we want a real array so the app can always fall back safely.
     const coerced = coerceToStringArray(response.mcq_options);
-    if (coerced !== null) {
-      response.mcq_options = coerced;
+    response.mcq_options = coerced ?? [];
+  }
+
+  // Spec: mq_questions_remaining should exist when entering MQ or when returning mq_answer.
+  if (response.beat_id === 'MQ' || response.response_type === 'mq_answer') {
+    const asked = response.lesson_state?.mq_questions_asked;
+    if (typeof response.mq_questions_remaining !== 'number') {
+      if (typeof asked === 'number') {
+        // asked is expected to be 0..2; compute remaining safely.
+        const remaining = 2 - asked;
+        response.mq_questions_remaining = Math.max(0, Math.min(2, remaining));
+      } else {
+        // Conservative default: start of MQ phase.
+        response.mq_questions_remaining = 2;
+      }
+    }
+    if (typeof response.mq_questions_remaining === 'number') {
+      response.mq_questions_remaining = Math.max(
+        0,
+        Math.min(2, response.mq_questions_remaining),
+      );
     }
   }
 
