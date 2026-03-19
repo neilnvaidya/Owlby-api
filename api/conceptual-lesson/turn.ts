@@ -27,7 +27,6 @@ import {
   formatConversationForGemini,
   isBudgetExhausted,
   validateAIResponse,
-  normalizeConceptualLessonResponse,
 } from '../../lib/conceptual-lesson-helpers.js';
 
 const ENDPOINT = 'conceptual-lesson';
@@ -155,36 +154,9 @@ export default async function handler(req: any, res: any) {
         continue;
       }
 
-      // Debug: log the MCQ shape the model returned.
-      if (candidate?.question_type === 'mcq') {
-        const mo = candidate.mcq_options;
-        const moType = Array.isArray(mo) ? 'array' : mo === null ? 'null' : typeof mo;
-        console.info('[CONCEPTUAL-LESSON /turn] mcq_options debug', {
-          beatIn: lesson_state.beat,
-          attempt: attempt + 1,
-          question_type: candidate.question_type,
-          mcq_options_type: moType,
-          mcq_options_len: Array.isArray(mo) ? mo.length : undefined,
-          mcq_options_preview:
-            typeof mo === 'string'
-              ? mo.slice(0, 160)
-              : Array.isArray(mo)
-                ? mo
-                : mo,
-        });
-      }
-
-      const normalized = normalizeConceptualLessonResponse(
-        candidate,
-        lesson_state as ConceptualLessonState,
-      );
-
-      const validation = validateAIResponse(
-        normalized,
-        lesson_state as ConceptualLessonState,
-      );
+      const validation = validateAIResponse(candidate, lesson_state as ConceptualLessonState);
       if (validation.valid) {
-        parsed = normalized as ConceptualLessonResponse;
+        parsed = candidate as ConceptualLessonResponse;
         break;
       }
 
