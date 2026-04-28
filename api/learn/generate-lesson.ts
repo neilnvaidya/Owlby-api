@@ -11,6 +11,7 @@ import { verifySupabaseToken } from '../../lib/auth-supabase.js';
 import { checkRateLimit } from '../../lib/rate-limit.js';
 import { canGenerate } from '../../lib/subscription-gate.js';
 import { incrementDailyUsage } from '../../lib/usage-daily.js';
+import { resolveWikimediaImage } from '../../lib/wikimedia-image.js';
 
 /**
  * Process the JSON response from lesson generation API
@@ -187,6 +188,13 @@ export default async function handler(req: any, res: any) {
     
     // Normalize achievement tags
     normalizeAchievementTags(processedResponse);
+    const image = await resolveWikimediaImage({
+      requiredCategoryTags: processedResponse.requiredCategoryTags,
+      optionalTags: processedResponse.optionalTags,
+      topic,
+      fallbackQuery: topic,
+      maxQueries: 2,
+    });
 
     // Log timing (aligned with chat route)
     console.info('[LESSON API] Timing summary', {
@@ -224,6 +232,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({
       ...processedResponse,
+      image,
       success: true
     });
     

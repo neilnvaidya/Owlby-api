@@ -11,6 +11,16 @@ const FREE_TIER_STORY_LIMIT = Number(process.env.FREE_TIER_STORY_LIMIT ?? 5);
 
 const GATE_TIMEOUT_MS = 4000;
 
+/**
+ * Pre-revenue default: open access for all signed-in users (no daily limits, no subscription checks).
+ * Set SUBSCRIPTION_GATE_ENABLED=true (e.g. on Vercel) when launching free-tier limits and/or paid tiers.
+ */
+function isSubscriptionGateEnabled(): boolean {
+  const v = process.env.SUBSCRIPTION_GATE_ENABLED;
+  if (v === undefined || v === '') return false;
+  return v === 'true' || v === '1';
+}
+
 export type SubscriptionTier = 'premium' | 'early_adopter' | 'free';
 /** All lesson v3 routes use `lesson` for gating (see canGenerate(userId, 'lesson')). */
 export type RouteType = 'chat' | 'lesson' | 'story';
@@ -46,6 +56,9 @@ function getRouteLimit(route: RouteType): number {
 
 export async function canGenerate(userId: string, route: RouteType): Promise<GateResult> {
   const limit = getRouteLimit(route);
+  if (!isSubscriptionGateEnabled()) {
+    return { allowed: true, tier: 'free', dailyLimit: limit };
+  }
   try {
     return await withTimeout(checkAccess(userId, route, limit), GATE_TIMEOUT_MS);
   } catch (err: any) {

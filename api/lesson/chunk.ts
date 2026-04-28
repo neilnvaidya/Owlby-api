@@ -24,6 +24,7 @@ import {
   jsonGenerationError,
   lessonV3Prelude,
 } from '../../lib/lesson-v3-route-common.js';
+import { resolveWikimediaImage } from '../../lib/wikimedia-image.js';
 
 async function generateChunk(lo: LessonObjectivesState): Promise<{
   data: LessonChunkResponseBody;
@@ -167,6 +168,12 @@ export default async function handler(req: any, res: any) {
     const { data, responseText, usageMetadata, modelUsed: m } =
       await generateChunk(lo);
     modelUsed = m;
+    const currentObjective = lo.objectives[lo.current_index];
+    const image = await resolveWikimediaImage({
+      topic: currentObjective?.title || lo.topic,
+      fallbackQuery: lo.topic,
+      maxQueries: 2,
+    });
 
     logLessonV3Call({
       userId: ctx.userId,
@@ -190,6 +197,7 @@ export default async function handler(req: any, res: any) {
       question_type: data.question_type,
       mcq_options: data.mcq_options,
       correct_answer: data.correct_answer,
+      image,
     });
   } catch (err: any) {
     logLessonV3Call({

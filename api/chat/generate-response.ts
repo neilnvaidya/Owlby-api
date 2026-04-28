@@ -11,6 +11,7 @@ import { verifySupabaseToken } from '../../lib/auth-supabase.js';
 import { checkRateLimit } from '../../lib/rate-limit.js';
 import { canGenerate } from '../../lib/subscription-gate.js';
 import { incrementDailyUsage } from '../../lib/usage-daily.js';
+import { resolveWikimediaImage } from '../../lib/wikimedia-image.js';
 
 const ENABLE_API_LOGGING = true;
 const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
@@ -310,6 +311,13 @@ export default async function handler(req: any, res: any) {
 
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
       normalizeAchievementTags(processedResponse);
+      processedResponse.image = await resolveWikimediaImage({
+        requiredCategoryTags: processedResponse.requiredCategoryTags,
+        optionalTags: processedResponse.optionalTags,
+        topic: processedResponse.interactive_elements?.learn_more?.topic,
+        fallbackQuery: lastUserMessage,
+        maxQueries: 2,
+      });
 
       console.log(
         '[CHAT API] Full response structure:',
@@ -322,6 +330,7 @@ export default async function handler(req: any, res: any) {
             storyButton: processedResponse.interactive_elements?.story_button,
             optionalTags: processedResponse.optionalTags,
             requiredCategoryTags: processedResponse.requiredCategoryTags,
+            hasImage: !!processedResponse.image,
           },
           null,
           2
