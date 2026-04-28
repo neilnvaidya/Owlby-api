@@ -37,14 +37,6 @@
       "destination": "/api/profile?context=onboarding"
     },
     {
-      "source": "/learn/lesson",
-      "destination": "/api/learn/generate-lesson"
-    },
-    {
-      "source": "/learn/generate-lesson",
-      "destination": "/api/learn/generate-lesson"
-    },
-    {
       "source": "/lesson/start",
       "destination": "/api/lesson/start"
     },
