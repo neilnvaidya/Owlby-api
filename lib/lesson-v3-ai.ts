@@ -4,10 +4,7 @@
 
 import { processAIRequest } from './api-handler.js';
 import { AI_RETRY_BACKOFF_MS } from './config.js';
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+import { sleep } from './async-utils.js';
 
 export interface LessonV3AIResult {
   responseText: string;

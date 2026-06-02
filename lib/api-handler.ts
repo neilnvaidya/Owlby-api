@@ -11,23 +11,12 @@ import {
 import { buildAIConfig, logTokenUsage } from './ai-config.js';
 import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
 import { executeGemini } from './ai-providers/gemini.js';
+import { withTimeout, sleep } from './async-utils.js';
 
 /**
  * Standard API Handler Utilities for Owlby
  * Gemini only; consistent error handling, CORS, and response patterns
  */
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  return new Promise<T>((resolve, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    promise.then(resolve).catch(reject);
-  }).finally(() => clearTimeout(timeoutId));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Standard request validation and CORS handling

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { withTimeout } from './async-utils.js';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -33,14 +34,6 @@ export interface GateResult {
   dailyLimit: number; // limit for the specific route being checked
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let tid: NodeJS.Timeout;
-  return new Promise<T>((resolve, reject) => {
-    tid = setTimeout(() => reject(new Error('GATE_TIMEOUT')), ms);
-    promise.then(resolve).catch(reject);
-  }).finally(() => clearTimeout(tid));
-}
-
 function getRouteLimit(route: RouteType): number {
   switch (route) {
     case 'chat':
@@ -60,7 +53,7 @@ export async function canGenerate(userId: string, route: RouteType): Promise<Gat
     return { allowed: true, tier: 'free', dailyLimit: limit };
   }
   try {
-    return await withTimeout(checkAccess(userId, route, limit), GATE_TIMEOUT_MS);
+    return await withTimeout(checkAccess(userId, route, limit), GATE_TIMEOUT_MS, 'GATE_TIMEOUT');
   } catch (err: any) {
     // On timeout or DB error, fail open so we don't block paying users
     console.error('[GATE] Error checking subscription, failing open:', err.message);

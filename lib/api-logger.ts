@@ -1,5 +1,6 @@
 // Owlby-api/lib/api-logger.ts
 import { createClient } from '@supabase/supabase-js';
+import { withTimeout } from './async-utils.js';
 
 // Re-using the Supabase client from the web project for consistency
 // This assumes that environment variables SUPABASE_URL and SUPABASE_ANON_KEY are available
@@ -9,14 +10,6 @@ const supabase = createClient(
 );
 
 const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 15000);
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  return new Promise<T>((resolve, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    promise.then(resolve).catch(reject);
-  }).finally(() => clearTimeout(timeoutId));
-}
 
 interface APILogData {
   route: 'chat' | 'lesson' | 'story';

@@ -1,13 +1,6 @@
 import { ai } from '../ai-config.js';
 import type { AIAdapterResult, NormalizedUsage } from './types.js';
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  return new Promise<T>((resolve, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    promise.then(resolve).catch(reject);
-  }).finally(() => clearTimeout(timeoutId));
-}
+import { withTimeout } from '../async-utils.js';
 
 function normalizeGeminiUsage(usageMetadata: any): NormalizedUsage {
   const promptTokenCount = usageMetadata?.promptTokenCount ?? 0;
