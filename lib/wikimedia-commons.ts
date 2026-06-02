@@ -220,7 +220,7 @@ function scoreFilename(search: string, title: string): number {
     .toLowerCase()
     .trim()
     .split(/\s+/)
-    .filter((w) => w.length > 0);
+    .filter((w) => w.length >= 2);
   const namePart = title.replace(/^File:/i, '').replace(/\.[a-z0-9]+$/i, '');
   const nameWords = namePart
     .toLowerCase()
@@ -228,10 +228,23 @@ function scoreFilename(search: string, title: string): number {
     .filter((w) => w.length > 0);
   const nameLower = namePart.toLowerCase();
   let score = 0;
+  let matchedCount = 0;
   for (const word of searchWords) {
-    if (word.length < 2) continue;
-    if (nameWords.includes(word)) score += 2;
-    else if (nameLower.includes(word)) score += 1;
+    if (nameWords.includes(word)) {
+      score += 2;
+      matchedCount++;
+    } else if (nameLower.includes(word)) {
+      score += 1;
+      matchedCount++;
+    }
+  }
+  // Bonus when every search word is present — strong relevance signal
+  if (searchWords.length > 0 && matchedCount === searchWords.length) {
+    score += 2;
+  }
+  // Penalise overly long filenames — many unrelated words dilute relevance
+  if (nameWords.length > 6) {
+    score = Math.max(0, score - Math.floor((nameWords.length - 6) / 2));
   }
   return score;
 }

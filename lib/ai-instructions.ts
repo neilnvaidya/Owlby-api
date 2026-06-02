@@ -61,37 +61,86 @@ SAFETY & CONTENT RULES:
  * To make model-specific: Create getChatInstructionsForPro() and getChatInstructionsForFlash()
  * and update chat route handler to select based on model parameter
  */
+function chatAgeTier(ageYears: number) {
+  if (ageYears <= 6) {
+    return {
+      audienceNote: 'This is a 5–6 year old child — kindergarten level.',
+      responseLength: 'Exactly 3 short fact sentences. Each sentence = one simple fun fact. Use ONLY words a 5-year-old already knows — zero jargon. Example style: "Stars are giant balls of fire. Our Sun is a star. Stars look tiny because they live very far away."',
+      followUpLength: '20–60 characters. Use simple words.',
+      buttonCount: '1',
+      vocabularyNote: 'Use only the most basic everyday words. No technical terms at all. If the topic has a tricky name, skip it or swap it for a simpler description.',
+      imageNote: 'ALWAYS include a wikimediaQuery — pictures are essential for this age. Also include at least 2 specific visual optionalTags (e.g. concrete animals, objects, or places) so more image options are available.',
+      bulletNote: 'No bullet points — only plain short sentences.',
+    };
+  }
+  if (ageYears <= 8) {
+    return {
+      audienceNote: 'This is a 7–8 year old child — early primary school.',
+      responseLength: '1 short paragraph, 3–5 sentences (100–220 characters). Use simple everyday words. Include one concrete example or comparison a child can picture.',
+      followUpLength: '25–90 characters.',
+      buttonCount: '1–2',
+      vocabularyNote: 'Use simple words. Introduce at most ONE new term per response, and explain it immediately in plain words right after.',
+      imageNote: 'ALWAYS include a wikimediaQuery. Include at least 2 specific visual optionalTags.',
+      bulletNote: 'Avoid bullet points — prefer short connected sentences.',
+    };
+  }
+  if (ageYears <= 11) {
+    return {
+      audienceNote: 'This is a 9–11 year old — upper primary school.',
+      responseLength: '1–2 paragraphs (180–450 characters total). Grade 4–6 vocabulary. Give a clear explanation with a brief real-world example.',
+      followUpLength: '40–130 characters.',
+      buttonCount: '2',
+      vocabularyNote: 'Grade 4–6 vocabulary. Introduce subject-specific terms with a short plain-English explanation alongside them.',
+      imageNote: 'Include a wikimediaQuery when a clear visual subject exists.',
+      bulletNote: 'Bullet points are fine for lists of 3+ items.',
+    };
+  }
+  if (ageYears <= 15) {
+    return {
+      audienceNote: 'This is a 12–15 year old — secondary school.',
+      responseLength: '2 paragraphs (280–650 characters total). Rich grade 7–10 vocabulary. Connect ideas and give context or real-world relevance.',
+      followUpLength: '50–160 characters.',
+      buttonCount: '2–3',
+      vocabularyNote: 'Grade 7–10 vocabulary. Technical terms are fine — use them naturally, with brief context if the term is rare.',
+      imageNote: 'Include a wikimediaQuery when a clear visual subject exists.',
+      bulletNote: 'Bullet points are fine when presenting multiple distinct facts.',
+    };
+  }
+  return {
+    audienceNote: 'This is a 16–18 year old — senior secondary / early college level.',
+    responseLength: '2–3 paragraphs (400–1000 characters total). Sophisticated vocabulary. Nuanced explanations, connections between concepts, broader implications.',
+    followUpLength: '60–200 characters.',
+    buttonCount: '2–3',
+    vocabularyNote: 'Full academic vocabulary appropriate. Technical depth is welcomed.',
+    imageNote: 'Include a wikimediaQuery when a clear visual subject exists.',
+    bulletNote: 'Bullet points are fine when presenting structured information.',
+  };
+}
+
 export function getChatInstructions(gradeLevel: number, recentContext: string): string {
   const ageYears = gradeToAge(gradeLevel);
+  const tier = chatAgeTier(ageYears);
 
   return `${BASE_OWLBY_INSTRUCTIONS}
 
-TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years old). These are capable students (grades 2-6, ages 7-12) who can use Google and navigate technology effectively.
+TARGET AUDIENCE: ${tier.audienceNote} Grade ${gradeLevel}, approximately ${ageYears} years old.
 
-CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
-1. Answer questions DIRECTLY and COMPLETELY. Lead with facts and clear explanations. Users can Google things - give them answers that are better than a quick Google search.
-2. Be concise but complete. Users should get their answer quickly, similar to a good Google result, but with educational depth. Remember: these students can and will use Google if you're not helpful enough.
-3. Structure responses for clarity: use paragraphs for explanations, bullet points (- item) for lists or key facts when helpful.
-4. Vocabulary selection is CRITICAL: match words to the grade level (2-6). When introducing new vocabulary, always bold it. Use simpler words for lower grades, more sophisticated words for higher grades, but always respect their intelligence.
-5. Always bold vocabulary words and key terms using **bold** markdown for important words, scientific terms, and concepts.
-6. Avoid patronizing language. These are capable students. Use grade-appropriate vocabulary and concepts, but don't talk down to them. Match vocabulary to the user's grade level carefully.
+VOCABULARY: ${tier.vocabularyNote} Bold key terms with **bold** markdown. Never use condescending language — match the child's intelligence, not their age.
+
+RESPONSE REQUIREMENTS:
+1. Answer questions DIRECTLY. Lead with facts.
+2. response_text.main: ${tier.responseLength} CRITICAL: finish every sentence — NEVER truncate or end with "...".
+3. ${tier.bulletNote}
+4. response_text.follow_up: ONE engaging follow-up question (${tier.followUpLength}). Complete sentence ending with "?".
 
 OUTPUT RULES (MUST COMPLY):
-1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
+1. Return VALID JSON matching chatResponseSchema. Do NOT wrap in markdown.
 2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags (all four required).
-3. response_text.main: 2–3 paragraphs (300-1000 characters total) that answer the user clearly and COMPLETELY. CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis. Every sentence must be grammatically complete.
-   - Use markdown formatting: **bold** important keywords, terms, or concepts
-   - Bold key scientific terms, names, historical figures, or important concepts
-   - Keep bolding natural and educational - typically 1-3 bolded terms per paragraph
-   - You can use bullet points (- item) for lists and structured information when helpful
-4. response_text.follow_up: ONE complete engaging follow-up question (50-200 characters). MUST be a complete sentence ending with a question mark.
-5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
-6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" } (e.g., "Olympic swimming" not "Olympic swimming, Siobhan Haughey"). The topic should be clean and simple.
-7. interactive_elements.story_button: Include when a short story could illustrate the topic. Structure: { "prompt": "simple story prompt" } (e.g., "a swimmer" not "Tell me a story about a swimmer").
-8. wikimediaQuery: A short 2–5 word concrete phrase for a Wikimedia Commons image search (e.g. "humpback whale", "Great Wall China", "monarch butterfly migration"). Must be a specific visual subject — NOT a badge category code like "ANIMALS_NATURE". If no clear visual subject fits, use empty string.
+3. interactive_elements.followup_buttons: ${tier.buttonCount} SHORT strings (e.g. "Tell me more", "Why?").
+4. interactive_elements.learn_more: { "topic": "clean simple topic name" } — include when deeper exploration makes sense.
+5. interactive_elements.story_button: { "prompt": "simple story prompt" } — include when a story would illustrate the topic.
+6. wikimediaQuery: 2–4 word concrete visual noun phrase (e.g. "humpback whale", "solar eclipse", "Roman aqueduct"). Name the specific thing pictured — avoid abstract categories. ${tier.imageNote}
 ${TAGS_OUTPUT_RULES}
-
-CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
 
 Recent conversation context:
 ${recentContext}
@@ -105,32 +154,28 @@ Return VALID JSON only.`;
  */
 export function getChatInstructionsForFlash25(gradeLevel: number, recentContext: string): string {
   const ageYears = gradeToAge(gradeLevel);
+  const tier = chatAgeTier(ageYears);
 
   return `${BASE_OWLBY_INSTRUCTIONS}
 
-TARGET AUDIENCE: Grade ${gradeLevel} students (approximately ${ageYears} years old). These are capable students (grades 2-6, ages 7-12) who can use Google and navigate technology effectively.
+TARGET AUDIENCE: ${tier.audienceNote} Grade ${gradeLevel}, approximately ${ageYears} years old.
 
-CRITICAL RESPONSE REQUIREMENTS (MUST FOLLOW):
-1. Answer questions DIRECTLY and COMPLETELY. Lead with facts and clear explanations.
-2. Be concise but complete. Keep the total response shorter than a typical long explanation.
-3. Structure responses for clarity: use short paragraphs and bullet points (- item) when helpful.
-4. Vocabulary selection is CRITICAL: match words to the grade level (2-6). When introducing new vocabulary, always bold it. Use simpler words for lower grades, more sophisticated words for higher grades, but always respect their intelligence.
-5. Always bold vocabulary words and key terms using **bold** markdown for important words, scientific terms, and concepts.
+VOCABULARY: ${tier.vocabularyNote} Bold key terms with **bold** markdown.
+
+RESPONSE REQUIREMENTS (be concise — shorter than a full explanation):
+1. Answer DIRECTLY. Lead with facts.
+2. response_text.main: ${tier.responseLength} CRITICAL: finish every sentence — NEVER truncate or end with "...".
+3. ${tier.bulletNote}
+4. response_text.follow_up: ONE follow-up question (${tier.followUpLength}). Complete sentence ending with "?".
 
 OUTPUT RULES (MUST COMPLY):
-1. Return VALID JSON adhering exactly to the provided schema (chatResponseSchema). Do NOT wrap in markdown.
+1. Return VALID JSON matching chatResponseSchema. Do NOT wrap in markdown.
 2. JSON root keys: response_text, interactive_elements, requiredCategoryTags, optionalTags (all four required).
-3. response_text.main: 1–2 short paragraphs (200-600 characters total). CRITICAL: You MUST finish all sentences. NEVER truncate, cut off mid-sentence, or end with "..." or ellipsis.
-   - Use markdown formatting: **bold** important keywords, terms, or concepts
-   - Keep bolding natural and educational - typically 1-2 bolded terms per paragraph
-4. response_text.follow_up: ONE complete engaging follow-up question (40-160 characters). MUST be a complete sentence ending with a question mark.
-5. interactive_elements.followup_buttons: 1-2 SHORT strings (e.g. "Tell me more", "Another angle").
-6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" }.
-7. interactive_elements.story_button: Include only if a short story would clearly help learning.
-8. wikimediaQuery: Short 2–5 word phrase for a Wikimedia Commons image search (e.g. "humpback whale", "Great Wall China"). Specific visual subject only. Empty string if none fits.
+3. interactive_elements.followup_buttons: 1–2 SHORT strings (e.g. "Tell me more", "Why?").
+4. interactive_elements.learn_more: { "topic": "clean simple topic name" } — include when useful.
+5. interactive_elements.story_button: { "prompt": "simple story prompt" } — include only if clearly helpful.
+6. wikimediaQuery: 2–4 word concrete visual noun phrase. Name the specific thing pictured. ${tier.imageNote}
 ${TAGS_OUTPUT_RULES}
-
-CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
 
 Recent conversation context:
 ${recentContext}
@@ -356,6 +401,15 @@ export function getStoryInstructions(prompt: string, gradeLevel: number, tags?: 
   const contextLine = tags && tags.length > 0
     ? `Context tags (use when relevant): ${tags.slice(0, 5).join(', ')}.\n`
     : '';
+  const storyLength = ageYears <= 6
+    ? '2 paragraphs, 1 sentence each. Only the simplest words a 5-year-old knows. Each sentence is a clear story moment.'
+    : ageYears <= 8
+      ? '2–3 short paragraphs, 1 simple sentence each. Easy vocabulary, fun and concrete.'
+      : ageYears <= 11
+        ? '3 paragraphs, 1–2 sentences each. Grade 4–6 vocabulary.'
+        : ageYears <= 15
+          ? '3–4 paragraphs, 1–2 sentences each. Richer vocabulary, some tension or humour.'
+          : '4 paragraphs, 2 sentences each. Sophisticated and engaging.';
 
   return `${BASE_OWLBY_INSTRUCTIONS}
 
@@ -363,7 +417,7 @@ Create a short story for prompt: "${prompt}", grade ${gradeLevel} (${ageYears} y
 
 STRUCTURE:
 - title: ≤50 chars
-- content: 3–4 paragraphs, 1–2 sentences each
+- content: ${storyLength}
 - characters: list main characters (short)
 - setting: one short sentence
 - moral: optional, one sentence

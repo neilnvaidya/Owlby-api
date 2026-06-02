@@ -25,7 +25,7 @@ export const chatResponseSchema = {
       properties: {
         main: {
           type: Type.STRING,
-          description: 'Complete response text, 300-1000 characters. Must be complete sentences, never truncated.',
+          description: 'Complete response text. Length and vocabulary must match the student age specified in the system instruction. Must be complete sentences, never truncated.',
         },
         follow_up: {
           type: Type.STRING,
