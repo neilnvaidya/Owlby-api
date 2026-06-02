@@ -169,10 +169,18 @@ export default async function handler(req: any, res: any) {
       await generateChunk(lo);
     modelUsed = m;
     const currentObjective = lo.objectives[lo.current_index];
+    // Use a query specific to the current objective (topic + objective title) so each
+    // chunk gets a distinct, relevant image rather than repeating the topic-level one.
+    const objectiveTitle = currentObjective?.title?.trim();
+    const specificQuery = objectiveTitle ? `${lo.topic} ${objectiveTitle}` : lo.topic;
+    const avoidImageUrls = Array.isArray(body.avoid_image_urls)
+      ? body.avoid_image_urls.filter((u: unknown): u is string => typeof u === 'string' && u.length > 0)
+      : undefined;
     const image = await resolveWikimediaImage({
-      topic: currentObjective?.title || lo.topic,
-      fallbackQuery: lo.topic,
-      maxQueries: 2,
+      topic: specificQuery,
+      fallbackQuery: objectiveTitle || lo.topic,
+      maxQueries: 3,
+      avoidUrls: avoidImageUrls,
     });
 
     logLessonV3Call({

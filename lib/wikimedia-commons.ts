@@ -241,7 +241,10 @@ function scoreFilename(search: string, title: string): number {
  * Uses similarity scoring only (search terms in filename); picks highest-scoring valid bitmap.
  * Query should be a short, descriptive phrase suitable for Commons (e.g. "honey bee", "prism optical").
  */
-async function getOneImageForQuery(query: string): Promise<GetImageResult | null> {
+async function getOneImageForQuery(
+  query: string,
+  avoidUrls?: Set<string>
+): Promise<GetImageResult | null> {
   const searchQ = buildImageSearchQuery(query);
   const pages = await searchPages(searchQ, 10);
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
@@ -253,6 +256,11 @@ async function getOneImageForQuery(query: string): Promise<GetImageResult | null
   for (const { page } of scored) {
     const details = await getFileDetails(page.title);
     if (details) {
+      // Skip images the caller has already shown (e.g. a previous chunk/message),
+      // so we keep looking down the ranked list for a distinct one.
+      if (avoidUrls && avoidUrls.size > 0 && avoidUrls.has(details.imageUrl)) {
+        continue;
+      }
       return {
         imageUrl: details.imageUrl,
         attributionUrl: details.attributionUrl,
@@ -273,14 +281,15 @@ async function getOneImageForQuery(query: string): Promise<GetImageResult | null
  */
 export async function getImagesForTags(
   tags: string[],
-  fallbackQuery?: string
+  fallbackQuery?: string,
+  avoidUrls?: Set<string>
 ): Promise<ImageForTagResult[]> {
   const trimmed = tags.filter((t) => typeof t === 'string' && t.trim().length > 0).map((t) => t.trim());
   const queries = trimmed.length > 0 ? trimmed : [fallbackQuery?.trim() || DEFAULT_FALLBACK_QUERY];
 
   const results = await Promise.all(
     queries.map(async (tag): Promise<ImageForTagResult> => {
-      const result = await getOneImageForQuery(tag);
+      const result = await getOneImageForQuery(tag, avoidUrls);
       if (result) {
         return { tag, ...result };
       }

@@ -10,11 +10,17 @@ export interface WikimediaImagePayload {
 }
 
 interface ResolveWikimediaImageParams {
+  /** Explicit short Commons search phrase from AI (most specific, highest priority). */
+  wikimediaQuery?: string;
   optionalTags?: string[];
+  /** Achievement badge category codes (e.g. "ANIMALS_NATURE") — intentionally NOT
+   *  used as search queries because they return irrelevant results. */
   requiredCategoryTags?: string[];
   topic?: string;
   fallbackQuery?: string;
   maxQueries?: number;
+  /** Image URLs already shown to this user (e.g. previous chunk/message); skipped. */
+  avoidUrls?: string[];
 }
 
 function asTrimmed(value: unknown): string | null {
@@ -48,10 +54,12 @@ function isImageResult(
 }
 
 function buildCandidateQueries(params: ResolveWikimediaImageParams): string[] {
-  const required = Array.isArray(params.requiredCategoryTags) ? params.requiredCategoryTags : [];
+  // requiredCategoryTags are achievement badge codes (e.g. "ANIMALS_NATURE") — these
+  // are NOT valid Commons search queries and reliably return irrelevant images. Skip them.
+  // Priority: explicit wikimediaQuery > optionalTags (free-form topic phrases) > topic > fallback.
   const optional = Array.isArray(params.optionalTags) ? params.optionalTags : [];
   const ordered = [
-    ...required.map(asTrimmed).filter(Boolean),
+    asTrimmed(params.wikimediaQuery),
     ...optional.map(asTrimmed).filter(Boolean),
     asTrimmed(params.topic),
     asTrimmed(params.fallbackQuery),
@@ -64,10 +72,14 @@ export async function resolveWikimediaImage(
 ): Promise<WikimediaImagePayload | null> {
   const maxQueries = Math.min(Math.max(params.maxQueries ?? 2, 1), 3);
   const candidates = buildCandidateQueries(params).slice(0, maxQueries);
+  const avoidUrls =
+    Array.isArray(params.avoidUrls) && params.avoidUrls.length > 0
+      ? new Set(params.avoidUrls.filter((u): u is string => typeof u === 'string' && u.length > 0))
+      : undefined;
 
   for (const query of candidates) {
     try {
-      const [result] = await getImagesForTags([query], query);
+      const [result] = await getImagesForTags([query], query, avoidUrls);
       if (isImageResult(result)) {
         return {
           imageUrl: result.imageUrl,

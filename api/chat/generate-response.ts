@@ -194,7 +194,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const parseStart = Date.now();
-  const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
+  const { messages, chatId, gradeLevel = 3, sessionMemory, avoidUrls } = req.body;
   mark('parseBodyMs', parseStart);
 
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
@@ -311,12 +311,26 @@ export default async function handler(req: any, res: any) {
 
       processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
       normalizeAchievementTags(processedResponse);
+
+      // For follow-up button presses (e.g. "Tell me more!") the last user message is
+      // not a usable image query. Prefer the conversation's substantive topic: the
+      // learn_more topic, else the longest recent user message, else the last message.
+      const longestUserMessage = (messages as any[])
+        .filter((m) => m?.role === 'user' && typeof m.text === 'string')
+        .map((m) => m.text as string)
+        .sort((a, b) => b.length - a.length)[0];
+      const imageFallbackQuery =
+        processedResponse.interactive_elements?.learn_more?.topic ||
+        longestUserMessage ||
+        lastUserMessage;
+
       processedResponse.image = await resolveWikimediaImage({
-        requiredCategoryTags: processedResponse.requiredCategoryTags,
+        wikimediaQuery: processedResponse.wikimediaQuery,
         optionalTags: processedResponse.optionalTags,
         topic: processedResponse.interactive_elements?.learn_more?.topic,
-        fallbackQuery: lastUserMessage,
-        maxQueries: 2,
+        fallbackQuery: imageFallbackQuery,
+        maxQueries: 3,
+        avoidUrls: Array.isArray(avoidUrls) ? avoidUrls : undefined,
       });
 
       console.log(

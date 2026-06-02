@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 /**
  * Live test for the Wikimedia image API.
- * One request with multiple tags; API fetches one image per tag from Commons in parallel.
- * Asserts we get a valid image (or error) for each tag.
+ * One request with one or more tags; the API resolves a SINGLE best image from
+ * the combined tags/topic and returns { success, image }.
+ * Asserts we get one valid image back.
  *
  * Usage:
  *   node scripts/media-image-test.js
  *   node scripts/media-image-test.js prism flamingo
  *
- * Uses API_BASE_URL from api-route-test-config.js (no auth required).
+ * Uses API_BASE_URL from api-route-test-config.js.
+ * NOTE: /api/media/image now requires a Supabase bearer token. Set
+ *   OWLBY_TEST_BEARER=<token> to authenticate (otherwise expect HTTP 401).
  * Exit code: 0 on success, 1 on failure (CI-friendly).
  */
 
@@ -28,10 +31,15 @@ async function run() {
   const tagsQuery = tags.join(',');
 
   const url = `${API_BASE_URL}/api/media/image?tags=${encodeURIComponent(tagsQuery)}`;
-  log(`GET ${url} (expect ${tags.length} image(s), fetched in parallel per tag)`);
+  log(`GET ${url} (expect a single resolved image)`);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  const headers = { Accept: 'application/json' };
+  if (process.env.OWLBY_TEST_BEARER) {
+    headers.Authorization = `Bearer ${process.env.OWLBY_TEST_BEARER}`;
+  }
 
   let res;
   let body;
@@ -39,7 +47,7 @@ async function run() {
   try {
     res = await fetch(url, {
       method: 'GET',
-      headers: { Accept: 'application/json' },
+      headers,
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
@@ -66,53 +74,37 @@ async function run() {
     process.exit(1);
   }
 
-  const images = body?.images;
-  if (!Array.isArray(images)) {
-    log('Missing or invalid images array in response');
+  // Endpoint resolves a single best image from the combined tags/topic.
+  const image = body?.image;
+  if (!image) {
+    log(`No image in response${body?.error ? `: ${body.error}` : ''}`);
     process.exit(1);
   }
 
-  if (images.length !== tags.length) {
-    log(`Expected ${tags.length} result(s), got ${images.length}`);
+  const imageUrl = image?.imageUrl;
+  const attributionUrl = image?.attributionUrl;
+  if (
+    typeof imageUrl !== 'string' || !imageUrl.trim() ||
+    typeof attributionUrl !== 'string' || !attributionUrl.trim()
+  ) {
+    log('Resolved image missing imageUrl or attributionUrl');
     process.exit(1);
   }
+  log(`  imageUrl: ${imageUrl}`);
+  log(`  attributionUrl: ${attributionUrl}`);
+  if (image.queryUsed) log(`  queryUsed: ${image.queryUsed}`);
 
-  let failed = 0;
-  for (let i = 0; i < images.length; i++) {
-    const item = images[i];
-    const tag = item?.tag ?? tags[i];
-    if (item?.error) {
-      log(`  [${tag}] error: ${item.error}`);
-      failed++;
-      continue;
+  // Optional: verify image URL is reachable
+  try {
+    const headController = new AbortController();
+    const headTimeout = setTimeout(() => headController.abort(), 5000);
+    const headRes = await fetch(imageUrl, { method: 'HEAD', signal: headController.signal });
+    clearTimeout(headTimeout);
+    if (!headRes.ok) {
+      log(`  warning: image URL returned ${headRes.status}`);
     }
-    const imageUrl = item?.imageUrl;
-    const attributionUrl = item?.attributionUrl;
-    if (typeof imageUrl !== 'string' || !imageUrl.trim() || typeof attributionUrl !== 'string' || !attributionUrl.trim()) {
-      log(`  [${tag}] missing imageUrl or attributionUrl`);
-      failed++;
-      continue;
-    }
-    log(`  [${tag}] imageUrl: ${imageUrl}`);
-    log(`  [${tag}] attributionUrl: ${attributionUrl}`);
-
-    // Optional: verify image URL is reachable
-    try {
-      const headController = new AbortController();
-      const headTimeout = setTimeout(() => headController.abort(), 5000);
-      const headRes = await fetch(imageUrl, { method: 'HEAD', signal: headController.signal });
-      clearTimeout(headTimeout);
-      if (!headRes.ok) {
-        log(`  [${tag}] warning: image URL returned ${headRes.status}`);
-      }
-    } catch (e) {
-      log(`  [${tag}] warning: could not HEAD image: ${e?.message || e}`);
-    }
-  }
-
-  if (failed > 0) {
-    log(`${failed} of ${tags.length} tag(s) failed`);
-    process.exit(1);
+  } catch (e) {
+    log(`  warning: could not HEAD image: ${e?.message || e}`);
   }
 
   log('OK');

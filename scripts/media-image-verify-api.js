@@ -77,16 +77,13 @@ async function fetchOne(tag) {
     if (res.status !== 200) {
       return { tag, error: body?.error || `HTTP ${res.status}` };
     }
-    const images = body?.images;
-    if (!Array.isArray(images) || images.length === 0) {
-      return { tag, error: 'No images in response' };
+    // Endpoint returns a single { success, image } payload (image may be null).
+    const image = body?.image;
+    if (!image) {
+      return { tag, error: body?.error || 'No image in response' };
     }
-    const first = images[0];
-    if (first.error) {
-      return { tag, error: first.error };
-    }
-    const filename = filenameFromAttributionUrl(first.attributionUrl);
-    return { tag, filename: filename || first.imageUrl?.split('/').pop() || null };
+    const filename = filenameFromAttributionUrl(image.attributionUrl);
+    return { tag, filename: filename || image.imageUrl?.split('/').pop() || null };
   } catch (err) {
     clearTimeout(timeoutId);
     return {

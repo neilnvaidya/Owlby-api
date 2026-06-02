@@ -88,6 +88,7 @@ OUTPUT RULES (MUST COMPLY):
 5. interactive_elements.followup_buttons: 2-3 SHORT strings (e.g. "Tell me more", "Another angle").
 6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" } (e.g., "Olympic swimming" not "Olympic swimming, Siobhan Haughey"). The topic should be clean and simple.
 7. interactive_elements.story_button: Include when a short story could illustrate the topic. Structure: { "prompt": "simple story prompt" } (e.g., "a swimmer" not "Tell me a story about a swimmer").
+8. wikimediaQuery: A short 2–5 word concrete phrase for a Wikimedia Commons image search (e.g. "humpback whale", "Great Wall China", "monarch butterfly migration"). Must be a specific visual subject — NOT a badge category code like "ANIMALS_NATURE". If no clear visual subject fits, use empty string.
 ${TAGS_OUTPUT_RULES}
 
 CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.
@@ -126,6 +127,7 @@ OUTPUT RULES (MUST COMPLY):
 5. interactive_elements.followup_buttons: 1-2 SHORT strings (e.g. "Tell me more", "Another angle").
 6. interactive_elements.learn_more: Include when deeper exploration makes sense. Structure: { "topic": "simplified topic name" }.
 7. interactive_elements.story_button: Include only if a short story would clearly help learning.
+8. wikimediaQuery: Short 2–5 word phrase for a Wikimedia Commons image search (e.g. "humpback whale", "Great Wall China"). Specific visual subject only. Empty string if none fits.
 ${TAGS_OUTPUT_RULES}
 
 CRITICAL OUTPUT CONSTRAINT: All text fields MUST contain complete sentences. If you cannot finish a thought within your response, make the thought shorter rather than truncating it.

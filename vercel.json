@@ -70,7 +70,11 @@
     },
     {
       "source": "/webhooks/revenuecat",
-      "destination": "/api/webhooks/revenuecat"
+      "destination": "/api/profile?scope=revenuecat-webhook"
+    },
+    {
+      "source": "/api/webhooks/revenuecat",
+      "destination": "/api/profile?scope=revenuecat-webhook"
     },
     {
       "source": "/api/update-profile",

@@ -14,6 +14,11 @@ export const chatResponseSchema = {
   type: Type.OBJECT,
   required: ['response_text', 'interactive_elements', 'requiredCategoryTags', 'optionalTags'],
   properties: {
+    wikimediaQuery: {
+      type: Type.STRING,
+      description:
+        'A short 2–5 word phrase for Wikimedia Commons image search. Must be a concrete, specific subject (e.g. "puffin bird", "coral reef fish", "Saturn rings"). NOT a category code. Use empty string if no good visual subject exists.',
+    },
     response_text: {
       type: Type.OBJECT,
       required: ['main'],
