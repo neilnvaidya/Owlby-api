@@ -24,8 +24,8 @@ describe('lesson v3 validators', () => {
     expect(() => validateLessonObjectivesForChunk(lo)).not.toThrow();
     const bad = validLo({
       objectives: [
-        { title: 'A', key_facts: ['a1', 'a2'], status: 'current', note: null },
-        { title: 'B', key_facts: ['b1', 'b2'], status: 'current', note: null },
+        { title: 'A', key_facts: ['a1', 'a2'], status: 'current', note: null, image_query: '' },
+        { title: 'B', key_facts: ['b1', 'b2'], status: 'current', note: null, image_query: '' },
       ],
     });
     expect(() => validateLessonObjectivesForChunk(bad)).toThrow();

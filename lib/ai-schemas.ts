@@ -127,7 +127,7 @@ export const lessonV3StartResponseSchema = {
 
 const lessonV3ObjectiveEntrySchema = {
   type: Type.OBJECT,
-  required: ['title', 'key_facts', 'status', 'note'],
+  required: ['title', 'key_facts', 'status', 'note', 'image_query'],
   properties: {
     title: { type: Type.STRING },
     key_facts: {
@@ -138,6 +138,11 @@ const lessonV3ObjectiveEntrySchema = {
     },
     status: { type: Type.STRING, enum: ['pending', 'current', 'complete'] },
     note: { type: Type.STRING, nullable: true },
+    image_query: {
+      type: Type.STRING,
+      description:
+        'A 2–4 word concrete visual noun phrase for a Wikimedia Commons image that illustrates this objective (e.g. "honey bee", "Roman aqueduct", "solar eclipse"). Name the specific thing pictured — NOT an abstract category. Empty string only if truly no visual subject fits.',
+    },
   },
 };
 

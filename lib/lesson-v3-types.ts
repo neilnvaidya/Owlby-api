@@ -11,6 +11,12 @@ export interface LessonObjectiveEntry {
   key_facts: string[];
   status: ObjectiveStatus;
   note: string | null;
+  /**
+   * Short concrete visual phrase (2–4 words) for the Wikimedia Commons image search
+   * when this objective is taught. Generated in Route 2 so each chunk has a reliable,
+   * relevant image query. May be '' if no clear visual subject exists.
+   */
+  image_query: string;
 }
 
 export interface LessonObjectivesState {
@@ -148,7 +154,11 @@ export function parseLessonObjectivesState(raw: unknown): LessonObjectivesState 
         : (() => {
             throw new Error(`objectives[${i}].note must be string or null`);
           })();
-    return { title, key_facts, status, note };
+    // image_query is optional/defensive: never fail a lesson over a cosmetic image
+    // field. Default to '' if absent (e.g. older clients) or not a string.
+    const image_query =
+      typeof e.image_query === 'string' ? e.image_query.trim() : '';
+    return { title, key_facts, status, note, image_query };
   });
   return { student_age, topic, objectives: entries, current_index };
 }
