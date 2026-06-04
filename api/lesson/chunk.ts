@@ -34,7 +34,7 @@ async function generateChunk(lo: LessonObjectivesState): Promise<{
   fallbackUsed: boolean;
 }> {
   const loJson = JSON.stringify(lo);
-  const baseInstr = getLessonV3ChunkInstructions(loJson);
+  const baseInstr = getLessonV3ChunkInstructions(loJson, lo.student_age);
   const contents = [
     {
       role: 'user',

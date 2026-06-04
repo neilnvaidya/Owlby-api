@@ -51,6 +51,39 @@ export function isValidStudentAge(age: number): boolean {
   return Number.isInteger(age) && age >= 5 && age <= 18;
 }
 
+/**
+ * Reading-level / vocabulary guidance per age band.
+ * Sentence COUNT is controlled separately (getMaxSentencesForContent); this controls
+ * WORD CHOICE and sentence LENGTH so language is genuinely age-appropriate, not just short.
+ * Injected into the lesson prompts (start, objectives, chunk).
+ */
+export function getReadingLevelGuidance(age: number): string {
+  const band = getAgeBandV3(age);
+  switch (band) {
+    case '5-7':
+      return `READING LEVEL (STRICT — kindergarten / grade 1, age ${age}):
+- Use ONLY words a 5–6 year old already knows. Everyday, concrete words for things they can see, touch, or do.
+- NO technical, abstract, or "grown-up" words. If a real term is hard (e.g. "photosynthesis", "evaporate"), do NOT use it — describe the idea in plain words instead, or skip it.
+- Very short sentences: about 5–9 words each. One idea per sentence.
+- Prefer simple verbs (make, get, eat, grow) over formal ones (produce, obtain, consume, develop).
+- Good style example: "Plants drink water. The sun helps them grow. Leaves catch sunlight to make food."`;
+    case '8-11':
+      return `READING LEVEL (grade 2–4, age ${age}):
+- Simple, everyday vocabulary a 9–11 year old reads comfortably.
+- Introduce at most ONE new term, and explain it in plain words in the same sentence.
+- Short sentences: about 8–14 words. Use a concrete example a child can picture.
+- Prefer plain verbs and nouns over formal/abstract ones.`;
+    case '12-15':
+      return `READING LEVEL (grade 6–8, age ${age}):
+- Clear, plain language. Define any technical term the first time you use it.
+- Sentences of moderate length; avoid dense or academic phrasing.`;
+    default:
+      return `READING LEVEL (grade 9–11, age ${age}):
+- Precise vocabulary and correct technical terms are fine, but keep sentences clear and direct.
+- Explain specialised jargon briefly on first use.`;
+  }
+}
+
 /** Part 7.3 — max sentences for teaching content */
 export function getMaxSentencesForContent(age: number): number {
   const band = getAgeBandV3(age);

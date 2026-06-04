@@ -3,6 +3,7 @@ import { TAGS_OUTPUT_RULES } from './ai-tags.js';
 import {
   getAgeBandV3,
   getObjectiveCountForAge,
+  getReadingLevelGuidance,
 } from './lesson-age.js';
 
 /**
@@ -238,6 +239,8 @@ You are generating ONLY the opening of a tutoring lesson (Route 1). Return VALID
 STUDENT_REQUEST: ${studentRequest}
 STUDENT_AGE: ${studentAge} (band: ${band})
 
+${getReadingLevelGuidance(studentAge)}
+
 RULES:
 - hook: exactly ONE sentence. Surprising, vivid, or counterintuitive fact about the topic. Age-appropriate. NOT a question. Do NOT say "today we will learn" or list lesson structure.
 - question: exactly ONE open-ended prior knowledge question. No multiple choice. Must invite any level of response (including "I don't know"). Do not lead toward one answer. Do not reveal topic facts the student did not give. Natural wording for the age band.
@@ -263,6 +266,8 @@ STUDENT_REQUEST: ${studentRequest}
 STUDENT_AGE: ${studentAge} (band: ${band})
 STARTER_RESPONSE (may be empty): ${starterResponse}
 
+${getReadingLevelGuidance(studentAge)}
+
 RULES:
 - Generate EXACTLY ${n} objectives — no fewer, no more.
 - Each objective: one sentence starting with a verb (Explain, Describe, Identify, Apply, Analyse...). Testable and specific. Sequenced so each builds on the prior.
@@ -280,7 +285,10 @@ RULES:
 Return ONLY JSON.`;
 }
 
-export function getLessonV3ChunkInstructions(lessonObjectivesJson: string): string {
+export function getLessonV3ChunkInstructions(
+  lessonObjectivesJson: string,
+  studentAge: number,
+): string {
   return `${BASE_OWLBY_INSTRUCTIONS}
 
 You are Route 3: teach the CURRENT objective only. Return VALID JSON with:
@@ -295,11 +303,14 @@ You are Route 3: teach the CURRENT objective only. Return VALID JSON with:
 LESSON_OBJECTIVES (authoritative):
 ${lessonObjectivesJson}
 
+${getReadingLevelGuidance(studentAge)}
+
 RULES:
+- The READING LEVEL above is mandatory for content, learning_points, AND questions. Match the student's age, not the topic's difficulty. The concepts can be simple even when the subject sounds advanced.
 - Read objectives[current_index] — that is the ONLY objective to teach and test.
-- Use the current objective's key_facts as the teaching spine.
+- Use the current objective's key_facts as the teaching spine, but REWRITE them at the reading level above (do not copy advanced wording).
 - content: teach the full current objective in one cohesive explanation. Max sentences by age: Young 2, Middle 3, Older 4, Senior 5 (see student_age in JSON).
-- learning_points: array with one clear KEY FACT per key_fact (same count/order). Each is a single, self-contained factual sentence a student could read on its own (not a fragment), stated plainly. Keep each fact short: roughly 1 sentence, age-appropriate vocabulary.
+- learning_points: array with one clear KEY FACT per key_fact (same count/order). Each is a single, self-contained factual sentence at the reading level above that a student could read on its own (not a fragment), stated plainly and simply.
 - questions: array with exactly one question per learning_point, in the same order.
 - Every questions[i] must test learning_points[i] specifically (not a generic objective-level question).
 - questions[i].question_type MUST follow age: ages 5–11 → "mcq"; 12–15 → "short_answer"; 16–18 → "higher_order".
