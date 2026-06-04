@@ -171,11 +171,19 @@ export async function getFileDetails(title: string): Promise<CommonsFileDetails 
   const imageUrl = preferred?.url;
   const descUrl = data?.file_description_url;
 
-  // Only accept bitmap images (photos, PNGs, etc.). Skip PDFs and other document types.
-  if (preferred?.mediatype !== 'BITMAP') {
+  if (!imageUrl || typeof imageUrl !== 'string') {
     return null;
   }
-  if (!imageUrl || typeof imageUrl !== 'string') {
+  // Accept photos (BITMAP) and diagrams/illustrations (DRAWING, i.e. SVG) — diagrams
+  // are often the clearest image for an educational topic. Skip PDFs and other
+  // document types. For DRAWING, Commons' `preferred.url` is a rasterized PNG
+  // (e.g. ".../500px-Foo.svg.png"), which React Native's <Image> can render — but we
+  // double-check the URL is a raster, because RN cannot display a raw .svg.
+  if (preferred?.mediatype === 'DRAWING') {
+    if (!/\.(png|jpe?g)$/i.test(imageUrl)) {
+      return null;
+    }
+  } else if (preferred?.mediatype !== 'BITMAP') {
     return null;
   }
 
@@ -198,60 +206,69 @@ const IMAGE_FILTER = ' filemime:image';
 
 /**
  * Build a Commons search query that favours image files and optional phrase match.
- * - Multi-word phrases are wrapped in quotes for better match (e.g. "honey bee").
+ * - Short 2–3 word phrases are wrapped in quotes for a tighter match (e.g. "honey bee").
+ *   Longer phrases are left UNQUOTED: an exact-phrase match on a 4+ word string
+ *   (e.g. a topic+objective title, or a chat sentence fallback) reliably returns
+ *   zero results, which silently kills the whole fallback chain. Unquoted, Commons
+ *   defaults to AND-matching the terms, which is what we want for those longer queries.
  * - We append filemime:image so results are mostly image files; first hit is often a valid bitmap.
  */
 function buildImageSearchQuery(userQuery: string): string {
   const trimmed = userQuery.trim();
   if (!trimmed) return DEFAULT_FALLBACK_QUERY + IMAGE_FILTER;
   const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
-  const phrase = words.length > 1 ? `"${trimmed}"` : trimmed;
+  const phrase = words.length >= 2 && words.length <= 3 ? `"${trimmed}"` : trimmed;
   return phrase + IMAGE_FILTER;
 }
 
 /**
- * Score how well a Commons file title matches the search query (0 = no match).
- * Uses search-term overlap: whole-word match in filename scores higher than substring.
- * Callers should pass a good Wikimedia search phrase (e.g. from Gemini) for best results.
+ * Rank boost (in search-result positions) for how well a Commons file title matches
+ * the query. Commons' own full-text search rank (filename + caption + categories +
+ * wikitext) is the primary relevance signal; filename word-overlap is only a light
+ * tiebreaker layered on top, NOT a hard filter.
+ *
+ *   - 5 ("strong")  every search word appears as a whole word in the filename.
+ *   - 2 ("weak")    at least one search word appears (whole word or substring).
+ *   - 0 ("none")    no overlap — keep the result, just don't promote it.
+ *
+ * This replaces the old "drop every score-0 file" floor, which silently discarded
+ * correct images whose filenames are opaque (camera codes, non-English, etc.) —
+ * e.g. it threw away Pont du Gard / Apis mellifera photos for "Roman aqueduct" /
+ * "honey bee" even though they were Commons' top hits.
  */
-function scoreFilename(search: string, title: string): number {
+function filenameMatchBoost(search: string, title: string): number {
   if (!title || !search) return 0;
   const searchWords = search
     .toLowerCase()
     .trim()
     .split(/\s+/)
     .filter((w) => w.length >= 2);
+  if (searchWords.length === 0) return 0;
   const namePart = title.replace(/^File:/i, '').replace(/\.[a-z0-9]+$/i, '');
   const nameWords = namePart
     .toLowerCase()
     .split(/[\s_\-–—(),]+/)
     .filter((w) => w.length > 0);
   const nameLower = namePart.toLowerCase();
-  let score = 0;
-  let matchedCount = 0;
+  let wholeWordMatches = 0;
+  let anyMatches = 0;
   for (const word of searchWords) {
     if (nameWords.includes(word)) {
-      score += 2;
-      matchedCount++;
+      wholeWordMatches++;
+      anyMatches++;
     } else if (nameLower.includes(word)) {
-      score += 1;
-      matchedCount++;
+      anyMatches++;
     }
   }
-  // Bonus when every search word is present — strong relevance signal
-  if (searchWords.length > 0 && matchedCount === searchWords.length) {
-    score += 2;
-  }
-  // Penalise overly long filenames — many unrelated words dilute relevance
-  if (nameWords.length > 6) {
-    score = Math.max(0, score - Math.floor((nameWords.length - 6) / 2));
-  }
-  return score;
+  if (wholeWordMatches === searchWords.length) return 5; // every query word present → strong
+  if (anyMatches > 0) return 2; // partial overlap → weak
+  return 0;
 }
 
 /**
  * Get one relevant image from Commons for a single search query.
- * Uses similarity scoring only (search terms in filename); picks highest-scoring valid bitmap.
+ * Orders results by Commons search rank, nudged by a bounded filename-overlap boost,
+ * then returns the first that resolves to a valid raster image (skipping avoided URLs).
  * Query should be a short, descriptive phrase suitable for Commons (e.g. "honey bee", "prism optical").
  */
 async function getOneImageForQuery(
@@ -259,14 +276,23 @@ async function getOneImageForQuery(
   avoidUrls?: Set<string>
 ): Promise<GetImageResult | null> {
   const searchQ = buildImageSearchQuery(query);
-  const pages = await searchPages(searchQ, 10);
+  const pages = await searchPages(searchQ, 15);
   const filePages = pages.filter((p) => p.title && p.title.startsWith('File:'));
 
-  const scored = filePages
-    .map((p) => ({ page: p, score: scoreFilename(query, p.title) }))
-    .sort((a, b) => b.score - a.score);
+  // Commons returns filePages in relevance order; that rank is our primary signal.
+  // A strong filename match can promote a result by up to 5 positions, but a weak or
+  // absent match never drops a well-ranked result out of contention — so when the
+  // filename gives no usable signal (opaque codes, other languages) we still fall
+  // back to Commons' top-ranked hit instead of returning nothing.
+  const ranked = filePages
+    .map((page, searchIndex) => ({
+      page,
+      searchIndex,
+      adjustedIndex: searchIndex - filenameMatchBoost(query, page.title),
+    }))
+    .sort((a, b) => a.adjustedIndex - b.adjustedIndex || a.searchIndex - b.searchIndex);
 
-  for (const { page } of scored) {
+  for (const { page } of ranked) {
     const details = await getFileDetails(page.title);
     if (details) {
       // Skip images the caller has already shown (e.g. a previous chunk/message),

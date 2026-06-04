@@ -72,27 +72,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  // `query` is the strongest signal the client has: the exact phrase that produced the
+  // currently-shown image (payload.queryUsed). Routing it to wikimediaQuery (highest
+  // priority) lets "Change image" re-run that working query and, via avoidUrls, walk to
+  // the next distinct result — instead of being demoted below tags/topic where it never ran.
   let tags: string[] = [];
   let topic = '';
-  let fallbackQuery = '';
+  let query = '';
+  let avoidUrls: string[] = [];
   if (req.method === 'GET') {
     tags = parseTags(req.query.tags);
     topic = typeof req.query.topic === 'string' ? req.query.topic : '';
-    fallbackQuery = typeof req.query.query === 'string' ? req.query.query : '';
+    query = typeof req.query.query === 'string' ? req.query.query : '';
+    avoidUrls = parseTags(req.query.avoidUrls);
   } else {
     const body = typeof req.body === 'object' && req.body !== null ? req.body : {};
     tags = parseTags((body as { tags?: unknown }).tags);
     topic = typeof (body as { topic?: unknown }).topic === 'string' ? (body as { topic: string }).topic : '';
-    fallbackQuery =
+    query =
       typeof (body as { query?: unknown }).query === 'string' ? (body as { query: string }).query : '';
+    avoidUrls = parseTags((body as { avoidUrls?: unknown }).avoidUrls);
   }
 
   try {
     const image = await resolveWikimediaImage({
+      wikimediaQuery: query || undefined,
       optionalTags: tags,
       topic,
-      fallbackQuery,
-      maxQueries: 2,
+      fallbackQuery: topic,
+      maxQueries: 3,
+      avoidUrls,
     });
     return res.status(200).json({
       success: true,
