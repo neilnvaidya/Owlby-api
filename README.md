@@ -1,265 +1,110 @@
-# Owlby API - Clean Architecture
+# Owlby API
 
-**Production-ready AI-powered educational content generation API**
+Vercel serverless backend for Owlby — the AI generation and auth gateway between the mobile app and
+Google Gemini / Supabase. Node.js + TypeScript (ESM).
 
----
-
-## 🏗️ **Clean Architecture Overview**
-
-The Owlby API has been refactored for maximum maintainability, consistency, and reusability:
-
-### **📁 Folder Structure**
-
-```
-Owlby-api/
-├── api/                          # API Endpoints
-│   ├── chat/
-│   │   └── generate-response.ts  # Chat conversation endpoint
-│   ├── learn/
-│   │   └── generate-lesson.ts    # Educational lesson generation  
-│   ├── story/
-│   │   └── generate-story.ts     # Story generation endpoint
-│   ├── achievements/
-│   │   └── sync.ts               # Achievement synchronization
-│   ├── feedback/
-│   │   └── submit.ts             # User feedback collection
-│   └── [other endpoints...]
-├── lib/                          # Shared Libraries & Utilities
-│   ├── ai-config.ts              # 🔧 AI configuration & utilities
-│   ├── ai-instructions.ts        # 📝 Centralized AI instructions
-│   ├── ai-schemas.ts             # 📋 JSON schemas for AI responses
-│   ├── api-handler.ts            # 🛠️ Standard request handling utilities
-│   ├── api-logger.ts             # 📊 Logging & analytics
-│   ├── auth.ts                   # 🔐 Authentication utilities
-│   ├── badgeCategories.ts        # 🏆 Achievement categories
-│   └── supabase.ts               # 🗄️ Database connection
-└── test/                         # Test files
-```
+> **How this fits the whole system:** see [`../Docs/Technical/SYSTEM_OVERVIEW.md`](../Docs/Technical/SYSTEM_OVERVIEW.md)
+> (only resolves in a combined monorepo checkout).
 
 ---
 
-## 🔧 **Core Components**
+## What it is
 
-### **1. AI Configuration (`lib/ai-config.ts`)**
-- **Centralized AI setup**: Single source for Gemini AI configuration
-- **Safety settings**: Child-friendly content filtering across all endpoints
-- **CORS handling**: Standard headers for all API routes
-- **Token usage logging**: Cost analysis and optimization metrics
+- **Serverless functions.** Each file under [`api/`](api/) is a standalone handler. Public paths are
+  mapped to handlers by the `rewrites` in [`vercel.json`](vercel.json) (kept within the Vercel
+  free-tier function limit — see [`docs/API-ROUTE-CONSOLIDATION.md`](docs/API-ROUTE-CONSOLIDATION.md)).
+- **AI provider: Google Gemini only** (`@google/genai`). No other providers. Model selection and the
+  per-route fallback chain are centralised in [`lib/config.ts`](lib/config.ts):
+  - Primary: `gemini-3.1-flash-lite-preview`
+  - Fallback 1: `gemini-3-flash-preview`
+  - Fallback 2: `gemini-2.5-flash`
+- **Auth via Supabase.** The service-role key verifies app JWTs server-side
+  ([`lib/auth-supabase.ts`](lib/auth-supabase.ts); token cache held ~5 min in process memory).
 
-**Key Features:**
-- ✅ Consistent safety settings for all AI endpoints
-- ✅ Standardized CORS configuration
-- ✅ Token usage tracking for cost optimization
-- ✅ Grade-to-age conversion utilities
+## Request lifecycle
 
-### **2. AI Instructions (`lib/ai-instructions.ts`)**
-- **Owlby personality**: Consistent character across all content
-- **Age-appropriate content**: Grade-level adapted instructions
-- **Educational focus**: Learning-oriented content generation
-- **Achievement tags**: Proper category tagging for progress tracking
+Every handler runs through one pipeline in [`lib/api-handler.ts`](lib/api-handler.ts):
 
-**Key Features:**
-- ✅ Centralized Owlby personality traits
-- ✅ Grade-specific content adaptation
-- ✅ Consistent achievement tag requirements
-- ✅ Educational content guidelines
+1. **`handleCORS`** — sets CORS headers, rejects non-POST.
+2. **`verifySupabaseToken`** — validates the `Bearer` JWT (Supabase service-role).
+3. **`canGenerate`** — subscription gate ([`lib/subscription-gate.ts`](lib/subscription-gate.ts)).
+   Disabled by default; set `SUBSCRIPTION_GATE_ENABLED=true` to enforce free-tier limits.
+4. **`processAIRequest`** — calls Gemini with retry + fallback.
 
-### **3. AI Schemas (`lib/ai-schemas.ts`)**
-- **Type safety**: Strongly typed response structures
-- **Consistency**: Unified schema patterns across endpoints
-- **Achievement integration**: Standardized tag fields for all content
-- **Validation**: Strict JSON schema enforcement
+> **Key convention — errors return HTTP 200.** All errors respond `200` with
+> `{ success: false, error, userMessage }`, never a non-2xx status. Native apps pop a system dialog
+> on non-2xx responses, so we avoid that on purpose. Keep this everywhere.
 
-**Key Features:**
-- ✅ Unified response structures
-- ✅ Achievement tag standardization
-- ✅ Type-safe API responses
-- ✅ Backward compatibility support
+## Endpoints
 
-### **4. API Handler (`lib/api-handler.ts`)**
-- **Standard patterns**: Consistent request/response handling
-- **Error management**: Unified error responses and logging
-- **Tag normalization**: Achievement tag processing
-- **CORS & validation**: Request validation and CORS handling
+Public path → handler (via `vercel.json`):
 
-**Key Features:**
-- ✅ Standardized error responses
-- ✅ Achievement tag normalization
-- ✅ Centralized request validation
-- ✅ Consistent logging patterns
+| Path | Handler | Purpose |
+|---|---|---|
+| `/lesson/start` | `api/lesson/start.ts` | Lesson v3 step 1 — hook + opening question |
+| `/lesson/objectives` | `api/lesson/objectives.ts` | Step 2 — objectives + init `LessonObjectivesState` |
+| `/lesson/chunk` | `api/lesson/chunk.ts` | Step 3 — teaching content + questions |
+| `/lesson/evaluate` | `api/lesson/evaluate.ts` | Step 4 — evaluate short-answer / higher-order |
+| `/lesson/consolidation` | `api/lesson/consolidation.ts` | Step 5 — final MCQ + closing |
+| `/chat/response` | `api/chat/generate-response.ts` | Conversational responses |
+| `/story/...` | `api/story/generate-story.ts` | Story generation (illustrated, Wikimedia images) |
+| `/media/image` | `api/media/image.ts` | Wikimedia Commons image lookup |
+| `/achievements/sync` | `api/achievements/sync.ts` | Achievement sync |
+| `/feedback/submit` | `api/feedback/submit.ts` | User feedback |
+| `/profile`, `/health`, `/subscription-status`, `/delete-account`, `/webhooks/revenuecat` | `api/profile.ts` | Profile + several scopes (consolidated handler) |
+| `/verify-email`, `/send-verification`, `/resend-verification` | `api/email.ts` | Email verification (web hand-off) |
 
----
+See `vercel.json` for the complete, authoritative list of rewrites.
 
-## 🎯 **API Endpoints**
+## Lesson System v3
 
-### **Chat Generation** (`/api/chat/generate-response`)
-**Purpose**: AI-powered conversational responses with interactive elements
+The lesson flow is shared with the app: **`LessonObjectivesState` is the single source of truth,
+passed back and forth between client and server.** Validators that enforce the invariants live in
+[`lib/lesson-v3-types.ts`](lib/lesson-v3-types.ts) and
+[`lib/lesson-v3-chunk-validate.ts`](lib/lesson-v3-chunk-validate.ts); shared route logic in
+[`lib/lesson-v3-route-common.ts`](lib/lesson-v3-route-common.ts) and AI calls in
+[`lib/lesson-v3-ai.ts`](lib/lesson-v3-ai.ts).
 
-**Input:**
-```json
-{
-  "messages": [{"role": "user", "text": "Tell me about space"}],
-  "chatId": "unique-chat-id",
-  "gradeLevel": 3,
-  "userId": "user-id"
-}
+**Age bands** are the single source of truth in [`lib/lesson-age.ts`](lib/lesson-age.ts) (mirrored
+app-side in `Owlby-app/utils/lesson-v3-age.ts`): 5–7, 8–11, 12–15, 16–18 control objective count,
+question type, and content length. Full spec: [`../Docs/lesson_system_spec_v3.md`](../Docs/lesson_system_spec_v3.md).
+
+## Subscription tiers
+
+All tier logic is in [`lib/subscription-gate.ts`](lib/subscription-gate.ts):
+- **`premium`** — active subscription
+- **`early_adopter`** — flag on the `users` table
+- **`free`** — daily rate-limited ([`lib/rate-limit.ts`](lib/rate-limit.ts), [`lib/usage-daily.ts`](lib/usage-daily.ts))
+
+## Development
+
+```sh
+npm install
+npm test            # jest (ESM via ts-jest)
+npx jest test/lesson-v3-validators.test.ts   # single file
+node index.js       # local dev (rarely needed; deploy target is Vercel)
 ```
 
-**Output:**
-```json
-{
-  "response_text": {
-    "main": "Space is an amazing place...",
-    "follow_up": "What planet interests you most?"
-  },
-  "interactive_elements": {
-    "followup_buttons": ["Tell me more", "Something new"],
-    "story_button": { "title": "Space Adventure", "story_prompt": "..." },
-    "learn_more": { "prompt": "Deep dive into astronomy", "tags": [...] }
-  },
-  "requiredCategoryTags": ["SPACE_PLANETS"],
-  "optionalTags": ["astronomy", "exploration", "cosmos"]
-}
+### Environment
+
+```
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+SUBSCRIPTION_GATE_ENABLED=false   # set true to enforce free-tier limits
 ```
 
-### **Lesson Generation** (`/api/learn/generate-lesson`)
-**Purpose**: Create structured educational lessons with quizzes
+See `env.example` for the full list.
 
-**Input:**
-```json
-{
-  "topic": "Solar System",
-  "gradeLevel": 4,
-  "userId": "user-id"
-}
-```
+## Specialized docs
 
-**Output:**
-```json
-{
-  "topic": "Solar System",
-  "title": "Journey Through Our Solar System",
-  "introduction": "Let's explore the amazing planets...",
-  "body": ["Our solar system has...", "The planets orbit..."],
-  "conclusion": "The solar system is truly magnificent!",
-  "keyPoints": ["8 planets orbit the Sun", "Each planet is unique"],
-  "keywords": [{"term": "orbit", "definition": "path around the Sun"}],
-  "challengeQuiz": {
-    "questions": [{"question": "How many planets...", "options": [...]}]
-  },
-  "difficulty": 8,
-  "requiredCategoryTags": ["SPACE_PLANETS"],
-  "optionalTags": ["planets", "astronomy"]
-}
-```
+- [`docs/API-ROUTE-CONSOLIDATION.md`](docs/API-ROUTE-CONSOLIDATION.md) — keeping within the Vercel function limit.
+- [`docs/WIKIMEDIA-AUTH.md`](docs/WIKIMEDIA-AUTH.md) — authenticated Wikimedia Commons for better rate limits.
+- [`docs/archive/`](docs/archive/) — point-in-time test/audit reports.
 
-### **Story Generation** (`/api/story/generate-story`)
-**Purpose**: Create engaging narratives based on prompts
+## Conventions
 
-**Input:**
-```json
-{
-  "prompt": "A friendly robot learns to paint",
-  "gradeLevel": 2,
-  "userId": "user-id"
-}
-```
-
-**Output:**
-```json
-{
-  "title": "Robo's Colorful Adventure",
-  "content": ["Once upon a time...", "Robo discovered..."],
-  "characters": ["Robo the Robot", "Artie the Artist"],
-  "setting": "A magical art studio",
-  "moral": "Practice makes perfect",
-  "requiredCategoryTags": ["CREATIVITY_ARTS"],
-  "optionalTags": ["robots", "creativity", "friendship"]
-}
-```
-
----
-
-## 🔧 **Key Improvements**
-
-### **Before Refactor:**
-❌ **Duplicated code** across 3 AI endpoints  
-❌ **Inconsistent error handling** patterns  
-❌ **Scattered configuration** in each file  
-❌ **Manual schema definitions** in each endpoint  
-❌ **Repeated safety settings** configuration  
-❌ **Inconsistent logging** approaches  
-
-### **After Refactor:**
-✅ **DRY principles**: Shared utilities eliminate 80%+ code duplication  
-✅ **Consistent patterns**: All endpoints follow identical structure  
-✅ **Centralized config**: Single source of truth for AI settings  
-✅ **Type safety**: Strongly typed schemas with validation  
-✅ **Standard error handling**: Unified error responses  
-✅ **Professional logging**: Structured logging with cost tracking  
-
----
-
-## 🚀 **Benefits**
-
-### **For Developers:**
-- **Easy maintenance**: Change once, apply everywhere
-- **Clear structure**: Find any functionality quickly
-- **Type safety**: Catch errors at compile time
-- **Consistent patterns**: Predictable code organization
-
-### **For Production:**
-- **Reliability**: Standardized error handling
-- **Performance**: Optimized token usage tracking
-- **Scalability**: Easy to add new AI endpoints
-- **Monitoring**: Comprehensive logging and metrics
-
-### **For Content Quality:**
-- **Consistency**: Uniform Owlby personality across all content
-- **Safety**: Centralized child-friendly content filters
-- **Educational value**: Consistent learning objectives
-- **Achievement integration**: Proper progress tracking
-
----
-
-## 📊 **Code Quality Metrics**
-
-| Metric | Before | After | Improvement |
-|--------|--------|--------|-------------|
-| **Code Duplication** | ~80% | ~15% | 65% reduction |
-| **Lines of Code** | 850+ | 450+ | 47% reduction |
-| **Files** | 12 | 8 | 33% fewer files |
-| **Configuration Points** | 15+ scattered | 4 centralized | 73% consolidation |
-| **Error Handling** | Inconsistent | Standardized | 100% consistent |
-| **Type Safety** | Partial | Complete | Full coverage |
-
----
-
-## 🛠️ **Development Guidelines**
-
-### **Adding New AI Endpoints:**
-1. **Create endpoint file** in appropriate `/api` subdirectory
-2. **Import shared utilities** from `/lib` folder
-3. **Use standardized patterns**: Follow existing endpoint structure
-4. **Define response schema** in `/lib/ai-schemas.ts`
-5. **Add instructions** to `/lib/ai-instructions.ts`
-
-### **Modifying AI Behavior:**
-1. **Instructions**: Edit `/lib/ai-instructions.ts` for personality/content changes
-2. **Safety**: Modify `/lib/ai-config.ts` for content filtering
-3. **Schemas**: Update `/lib/ai-schemas.ts` for response structure changes
-4. **Achievement tags**: Edit `/lib/badgeCategories.ts` for new categories
-
----
-
-## 🔐 **Security & Safety**
-
-- **Child-safe content**: Comprehensive content filtering for all AI responses
-- **Input validation**: Strict request parameter validation
-- **Error sanitization**: No sensitive information in error responses
-- **Rate limiting**: Ready for rate limiting implementation
-- **Authentication**: Consistent auth patterns across endpoints
-
----
-
-**The Owlby API is now production-ready with clean, maintainable, and scalable architecture that ensures consistent, safe, and educational content generation across all endpoints.**
+- **Gemini only** — do not introduce other AI providers.
+- **Errors return HTTP 200** with `{ success: false, ... }`.
+- **`unused_store_do_not_delete/`** holds archived handlers — do not delete or activate them.
+- Age rules in `lib/lesson-age.ts` are the single source of truth for both API prompts and app validation.
