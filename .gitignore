@@ -13,3 +13,4 @@ build/
 dist/
 .vercel
 /node_modules
+scripts/deepseek-curl.sh

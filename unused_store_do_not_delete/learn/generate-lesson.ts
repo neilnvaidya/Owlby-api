@@ -1,23 +1,26 @@
-import { logLessonCall, flushApiLogger } from '../../lib/api-logger';
-import { lessonResponseSchema } from '../../lib/ai-schemas';
-import { getLessonInstructions } from '../../lib/ai-instructions';
-import { 
-  handleCORS, 
-  processAIRequest, 
-  normalizeAchievementTags, 
-  createErrorResponse 
-} from '../../lib/api-handler';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
-import { checkRateLimit } from '../../lib/rate-limit';
+import { logLessonCall, flushApiLogger } from '../../lib/api-logger.js';
+import { lessonResponseSchema } from '../../lib/ai-schemas.js';
+import { getLessonInstructions } from '../../lib/ai-instructions.js';
+import {
+  handleCORS,
+  processAIRequest,
+  normalizeAchievementTags,
+  createErrorResponse,
+} from '../../lib/api-handler.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
+import { checkRateLimit } from '../../lib/rate-limit.js';
+import { canGenerate } from '../../lib/subscription-gate.js';
+import { incrementDailyUsage } from '../../lib/usage-daily.js';
+import { resolveWikimediaImage } from '../../lib/wikimedia-image.js';
 
 /**
- * Process the JSON response from lesson generation API
- * No truncation applied - AI schema and instructions constrain output sizes appropriately
+ * Legacy lesson route archived to unused_store_do_not_delete.
+ * Replaced in production by lesson-v3 flow.
  */
 function processLessonResponse(responseText: string, topic: string, gradeLevel: number) {
   try {
     const jsonResponse = JSON.parse(responseText);
-    
+
     if (jsonResponse.lesson) {
       const lesson = jsonResponse.lesson;
       return {
@@ -38,24 +41,28 @@ function processLessonResponse(responseText: string, topic: string, gradeLevel: 
         },
         tags: lesson.tags || [],
         difficulty: lesson.difficulty ?? 10,
-        // Include normalized achievement tags
         requiredCategoryTags: lesson.requiredCategoryTags || [],
-        optionalTags: lesson.optionalTags || []
+        optionalTags: lesson.optionalTags || [],
       };
     } else {
       throw new Error('Invalid lesson JSON structure');
     }
   } catch (error) {
     console.error('Failed to parse lesson JSON response:', error);
-    throw new Error(`Failed to generate lesson: Invalid response format. Please try again.`);
+    throw new Error('Failed to generate lesson: Invalid response format. Please try again.');
   }
 }
 
 export default async function handler(req: any, res: any) {
-  // Handle CORS and validate request method
   if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
+  let aiDurationMs = 0;
+  const timing: Record<string, number> = {};
+  const mark = (label: string, from: number) => {
+    timing[label] = Date.now() - from;
+  };
+
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '');
 
@@ -68,8 +75,11 @@ export default async function handler(req: any, res: any) {
   }
 
   let decoded: any;
+  const authStart = Date.now();
   try {
     decoded = await verifySupabaseToken(token);
+    mark('authMs', authStart);
+    (req as any)._authDurationMs = Date.now() - authStart;
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -79,21 +89,21 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
+  const gate = await canGenerate(userId, 'lesson');
+  if (!gate.allowed) {
+    return res.status(403).json({
+      success: false,
+      code: gate.reason,
+      userMessage:
+        gate.reason === 'daily_limit_reached'
+          ? "You've reached your daily limit. Upgrade for unlimited access."
+          : 'A subscription is required for this feature.',
+    });
+  }
+
   const { topic, gradeLevel = 3, tags } = req.body;
   const contextTags = Array.isArray(tags) ? tags : [];
-  
-  console.log('[LESSON API] Request received:', {
-    userId,
-    topic,
-    gradeLevel,
-    tags,
-    tagsType: typeof tags,
-    tagsIsArray: Array.isArray(tags),
-    contextTagsCount: contextTags.length,
-    contextTags,
-  });
-  
-  // Validate required parameters
+
   if (!topic) {
     logLessonCall({
       userId,
@@ -105,58 +115,55 @@ export default async function handler(req: any, res: any) {
       model: 'unknown',
     });
     void flushApiLogger();
-    
+
     return res.status(400).json({
       success: false,
-      error: "Please provide a topic for the lesson.",
-      userMessage: "Please provide a topic for the lesson.",
-      topic: topic || null
+      error: 'Please provide a topic for the lesson.',
+      userMessage: 'Please provide a topic for the lesson.',
+      topic: topic || null,
     });
   }
 
-  // Basic per-user rate limiting to reduce spamming
   const rate = checkRateLimit(`lesson:${userId}`, 8, 60 * 1000);
   if (!rate.allowed) {
     return res.status(429).json({
       success: false,
-      error: "Too many requests",
+      error: 'Too many requests',
       userMessage: "I'm preparing lots of lessons right now. Let's pause for a moment.",
       retryAfterMs: rate.retryAfterMs,
     });
   }
 
+  let modelUsed = 'unknown';
+  let fallbackUsed = false;
+
   try {
-    // Build system instructions
     const systemInstructions = getLessonInstructions(topic, gradeLevel, contextTags);
-    
-    // Create contents for AI request
     const contents = [
       {
         role: 'user',
-        parts: [
-          {
-            text: `topic = ${topic}, grade ${gradeLevel}, age ${gradeLevel + 5}`,
-          },
-        ],
+        parts: [{ text: `topic = ${topic}, grade ${gradeLevel}, age ${gradeLevel + 5}` }],
       },
     ];
-    
-    // Process AI request using centralized handler with retry and fallback
-    const { responseText, usageMetadata, modelUsed, fallbackUsed } = await processAIRequest(
-      lessonResponseSchema,
-      systemInstructions,
-      contents,
-      'lesson',
-      topic
-    );
-    
-    // Process the lesson response
-    const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
-    
-    // Normalize achievement tags
-    normalizeAchievementTags(processedResponse);
 
-    // Log successful request
+    const aiStart = Date.now();
+    const { responseText, usageMetadata, modelUsed: usedModel, fallbackUsed: usedFallback } =
+      await processAIRequest(lessonResponseSchema, systemInstructions, contents, 'lesson', topic);
+    modelUsed = usedModel;
+    fallbackUsed = usedFallback;
+    aiDurationMs = Date.now() - aiStart;
+    timing.aiMs = aiDurationMs;
+
+    const processedResponse = processLessonResponse(responseText, topic, gradeLevel);
+    normalizeAchievementTags(processedResponse);
+    const image = await resolveWikimediaImage({
+      requiredCategoryTags: processedResponse.requiredCategoryTags,
+      optionalTags: processedResponse.optionalTags,
+      topic,
+      fallbackQuery: topic,
+      maxQueries: 2,
+    });
+
     logLessonCall({
       userId,
       gradeLevel,
@@ -168,15 +175,19 @@ export default async function handler(req: any, res: any) {
       model: modelUsed,
     });
     void flushApiLogger();
-    
-    // Always include success flag
-    return res.status(200).json({
-      ...processedResponse,
-      success: true
-    });
-    
+    await incrementDailyUsage(userId, 'lesson');
+
+    return res.status(200).json({ ...processedResponse, image, success: true });
   } catch (error: any) {
-    // Log failed request
+    console.info('[LESSON API][ARCHIVED] Timing', {
+      totalMs: Date.now() - startTime,
+      authMs: (req as any)._authDurationMs ?? 0,
+      aiMs: aiDurationMs,
+      modelUsed,
+      fallbackUsed,
+      ...timing,
+      error: error.message,
+    });
     logLessonCall({
       userId,
       gradeLevel,
@@ -184,15 +195,10 @@ export default async function handler(req: any, res: any) {
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownError',
-      model: 'unknown',
+      model: modelUsed,
     });
     void flushApiLogger();
-
-    // Create standardized error response
-    const errorResponse = createErrorResponse(error, 'lesson', { 
-      topic: req.body?.topic 
-    });
-    
+    const errorResponse = createErrorResponse(error, 'lesson', { topic: req.body?.topic });
     return res.status(errorResponse.status).json(errorResponse.body);
   }
 }

@@ -5,9 +5,10 @@ import {
   HarmCategory,
 } from '@google/genai';
 
+import { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES } from './config.js';
+
 config();
 
-// AI Configuration Constants
 const API_KEY = process.env.GEMINI_API_KEY;
 if (!API_KEY) {
   throw new Error('GEMINI_API_KEY environment variable is required');
@@ -17,42 +18,8 @@ export const ai = new GoogleGenAI({
   apiKey: API_KEY,
 });
 
-/**
- * Supported Gemini Models
- */
-export const MODELS = {
-  FLASH_PREVIEW: 'gemini-3-flash-preview',
-  FLASH: 'gemini-3-flash-preview',
-  FLASH_OLD: 'gemini-2.5-flash',
-  PRO: 'gemini-2.5-pro',
-} as const;
-
-/**
- * Route-specific model configuration
- * Defines primary and fallback models for each endpoint
- * Fallback chain: preview -> flash -> 2.5-pro
- */
-export const ROUTE_MODEL_CONFIG: Record<string, {
-  primary: string;
-  fallback1: string;
-  fallback2: string;
-}> = {
-  chat: {
-    primary: MODELS.FLASH_OLD,
-    fallback1: MODELS.PRO,
-    fallback2: MODELS.FLASH_PREVIEW,
-  },
-  lesson: {
-    primary: MODELS.FLASH_PREVIEW,
-    fallback1: MODELS.FLASH,
-    fallback2: MODELS.PRO,
-  },
-  story: {
-    primary: MODELS.FLASH_PREVIEW,
-    fallback1: MODELS.FLASH,
-    fallback2: MODELS.PRO,
-  },
-};
+/** Re-export from config for callers that import from ai-config */
+export { MODELS, ROUTE_MODEL_CONFIG, ROUTE_TEMPERATURES };
 
 /**
  * Standard safety settings for all Owlby AI endpoints
@@ -76,15 +43,6 @@ export const SAFETY_SETTINGS = [
     threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
   },
 ];
-
-/**
- * Standard CORS headers for all API endpoints
- */
-export const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
 
 /**
  * Helper to calculate approximate age from grade level
@@ -137,17 +95,6 @@ export function buildFlashConfig(
     // Note: Flash does not support thinkingConfig
   };
 }
-
-/**
- * Route-specific temperature settings
- * Chat uses lower temperature (0.75) for more consistent factual responses
- * Lesson and Story use default (0.9) for more creative/engaging content
- */
-export const ROUTE_TEMPERATURES: Record<string, number> = {
-  chat: 0.75,
-  lesson: 0.9,
-  story: 0.9,
-};
 
 /**
  * Build AI configuration for Gemini 3 Flash Preview
@@ -219,7 +166,15 @@ export function buildAIConfig(
   // Gemini 3 models always use temperature 1.0
   const finalTemperature = isGemini3Model(modelName) ? 1.0 : (temperature ?? 0.9);
   
-  if (modelName === MODELS.FLASH_PREVIEW) {
+  if (modelName === MODELS.FLASH_LITE_PREVIEW) {
+    // 3.1 flash-lite preview: treat as Gemini 3 preview config
+    return buildFlashPreviewConfig(
+      responseSchema,
+      systemInstruction,
+      maxOutputTokens,
+      finalTemperature,
+    );
+  } else if (modelName === MODELS.FLASH_PREVIEW) {
     return buildFlashPreviewConfig(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);
   } else if (modelName === MODELS.FLASH) {
     return buildFlash3Config(responseSchema, systemInstruction, maxOutputTokens, finalTemperature);

@@ -1,18 +1,18 @@
-import { logChatCall, flushApiLogger } from '../../lib/api-logger';
+import { logChatCall, flushApiLogger } from '../../lib/api-logger.js';
+import { chatResponseSchema } from '../../lib/ai-schemas.js';
+import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions.js';
+import {
+  handleCORS,
+  processAIRequest,
+  normalizeAchievementTags,
+} from '../../lib/api-handler.js';
+import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config.js';
+import { verifySupabaseToken } from '../../lib/auth-supabase.js';
+import { checkRateLimit } from '../../lib/rate-limit.js';
+import { canGenerate } from '../../lib/subscription-gate.js';
+import { incrementDailyUsage } from '../../lib/usage-daily.js';
+import { resolveWikimediaImage } from '../../lib/wikimedia-image.js';
 
-import { chatResponseSchema } from '../../lib/ai-schemas';
-import { getChatInstructions, getChatInstructionsForFlash25 } from '../../lib/ai-instructions';
-import { 
-  handleCORS, 
-  processAIRequest, 
-  normalizeAchievementTags, 
-  createErrorResponse 
-} from '../../lib/api-handler';
-import { MODELS, ROUTE_MODEL_CONFIG } from '../../lib/ai-config';
-import { verifySupabaseToken } from '../../lib/auth-supabase';
-import { checkRateLimit } from '../../lib/rate-limit';
-
-// Toggle Supabase API logging - Always enabled for cost tracking
 const ENABLE_API_LOGGING = true;
 const ENABLE_TIMING_LOGS = process.env.ENABLE_TIMING_LOGS !== 'false';
 
@@ -39,87 +39,83 @@ function logTimingSummary(data: {
   });
 }
 
-/**
- * Process the JSON response from Owlby chat API
- * No truncation applied - AI schema and instructions constrain output sizes appropriately
- */
 function processOwlbyResponse(responseText: string) {
   try {
     const jsonResponse = JSON.parse(responseText);
-    
+
     if (jsonResponse.response_text && jsonResponse.interactive_elements) {
-      return {
-        success: true,
-        data: jsonResponse
+      const data = {
+        ...jsonResponse,
+        requiredCategoryTags: Array.isArray(jsonResponse.requiredCategoryTags) ? jsonResponse.requiredCategoryTags : [],
+        optionalTags: Array.isArray(jsonResponse.optionalTags) ? jsonResponse.optionalTags : [],
       };
+      return { success: true, data };
     } else {
       throw new Error('Invalid JSON structure');
     }
   } catch (error) {
     console.warn('Failed to parse JSON response, falling back to plain text:', error);
-    
+
     return {
       success: false,
       data: {
         response_text: {
           main: responseText,
-          follow_up: "What would you like to learn about next?"
+          follow_up: "What would you like to learn about next?",
         },
         interactive_elements: {
-          followup_buttons: [
-            "Tell me more!",
-            "Something new"
-          ],
-          learn_more: {
-            topic: "Explore this topic further"
-          },
-          story_button: {
-            prompt: "Tell me a fun story about this topic"
-          }
+          followup_buttons: ["Tell me more!", "Something new"],
+          learn_more: { topic: "Explore this topic further" },
+          story_button: { prompt: "Tell me a fun story about this topic" },
         },
-        content_blocks: {
-          safety_filter: false
-        }
-      }
+        requiredCategoryTags: [],
+        optionalTags: [],
+      },
     };
   }
 }
 
-/**
- * Process the full response with metadata
- */
-function processResponse(responseText: string, query: string, gradeLevel: number, chatId: string) {
+function processResponse(
+  responseText: string,
+  _query: string,
+  gradeLevel: number,
+  chatId: string
+) {
   const processedResponse = processOwlbyResponse(responseText);
-  
+
   return {
     ...processedResponse.data,
     chatId,
     gradeLevel,
-    success: processedResponse.success
+    success: processedResponse.success,
   };
 }
 
 export default async function handler(req: any, res: any) {
-  // Log incoming request to Vercel logs
   const requestStartTime = Date.now();
   const timestamp = new Date().toISOString();
   const method = req.method || 'POST';
   const url = req.url || '/api/chat/generate-response';
   const userAgent = req.headers?.['user-agent'] || 'unknown';
   const ip = req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || 'unknown';
-  
-  // Log incoming request to Vercel logs - using console.log for better visibility
+
   console.log(`[CHAT API] ${timestamp} - ${method} ${url}`);
   console.log(`[CHAT API] IP: ${ip} | User-Agent: ${userAgent}`);
-  console.log('[CHAT API] Request details:', JSON.stringify({
-    method,
-    url,
-    userAgent,
-    ip,
-    timestamp,
-  }, null, 2));
+  console.log(
+    '[CHAT API] Request details:',
+    JSON.stringify(
+      {
+        method,
+        url,
+        userAgent,
+        ip,
+        timestamp,
+      },
+      null,
+      2
+    )
+  );
 
-  // Handle CORS and validate request method
   if (!handleCORS(req, res)) return;
 
   const startTime = Date.now();
@@ -144,9 +140,8 @@ export default async function handler(req: any, res: any) {
   try {
     const authStart = Date.now();
     decoded = await verifySupabaseToken(token);
-    const authDurationMs = Date.now() - authStart;
-    (req as any)._authDurationMs = authDurationMs;
     mark('authMs', authStart);
+    (req as any)._authDurationMs = Date.now() - authStart;
   } catch (error: any) {
     return res.status(401).json({
       success: false,
@@ -156,11 +151,52 @@ export default async function handler(req: any, res: any) {
   }
 
   const userId = decoded?.id || 'unknown';
+
+  const gate = await canGenerate(userId, 'chat');
+  if (!gate.allowed) {
+    if (ENABLE_API_LOGGING) {
+      logChatCall({
+        userId,
+        chatId: req.body?.chatId || 'unknown',
+        gradeLevel: req.body?.gradeLevel ?? 3,
+        message: '[blocked]',
+        responseTimeMs: Date.now() - startTime,
+        success: false,
+        error: gate.reason || 'subscription_required',
+        model: 'unknown',
+      });
+      void flushApiLogger();
+    }
+    return res.status(403).json({
+      success: false,
+      response_text: {
+        main:
+          gate.reason === 'daily_limit_reached'
+            ? "You've reached your daily limit. Upgrade for unlimited access."
+            : "A subscription is required for this feature.",
+        follow_up: "What would you like to try next?",
+      },
+      interactive_elements: {
+        followup_buttons: ["Try again", "Ask something else"],
+        learn_more: { topic: "" },
+        story_button: { prompt: "" },
+      },
+      content_blocks: { safety_filter: false },
+      chatId: req.body?.chatId || 'unknown',
+      gradeLevel: req.body?.gradeLevel ?? 3,
+      error: gate.reason,
+      userMessage:
+        gate.reason === 'daily_limit_reached'
+          ? "You've reached your daily limit. Upgrade for unlimited access."
+          : "A subscription is required for this feature.",
+      retryAfterMs: gate.reason === 'daily_limit_reached' ? 86400000 : undefined,
+    });
+  }
+
   const parseStart = Date.now();
-  const { messages, chatId, gradeLevel = 3, sessionMemory } = req.body;
+  const { messages, chatId, gradeLevel = 3, sessionMemory, avoidUrls } = req.body;
   mark('parseBodyMs', parseStart);
 
-  // Validate required parameters
   if (!messages || !Array.isArray(messages) || messages.length === 0 || !chatId) {
     if (ENABLE_API_LOGGING) {
       logChatCall({
@@ -175,28 +211,25 @@ export default async function handler(req: any, res: any) {
       });
       void flushApiLogger();
     }
-    
+
     return res.status(400).json({
       success: false,
       response_text: {
         main: "I'm having trouble understanding that. Could you try asking again?",
-        follow_up: "What would you like to learn about?"
+        follow_up: "What would you like to learn about?",
       },
       interactive_elements: {
         followup_buttons: ["Try again", "Ask something else"],
         learn_more: { topic: "" },
-        story_button: { prompt: "" }
+        story_button: { prompt: "" },
       },
-      content_blocks: {
-        safety_filter: false
-      },
+      content_blocks: { safety_filter: false },
       chatId: chatId || 'unknown',
       gradeLevel,
-      error: "Invalid request. Please try again."
+      error: "Invalid request. Please try again.",
     });
   }
 
-  // Basic per-user rate limiting to reduce spamming
   const rateStart = Date.now();
   const rate = checkRateLimit(`chat:${userId}`, 10, 60 * 1000);
   mark('rateLimitMs', rateStart);
@@ -210,48 +243,41 @@ export default async function handler(req: any, res: any) {
       interactive_elements: {
         followup_buttons: ["Try again soon"],
         learn_more: { topic: "" },
-        story_button: { prompt: "" }
+        story_button: { prompt: "" },
       },
-      content_blocks: {
-        safety_filter: false
-      },
+      content_blocks: { safety_filter: false },
       chatId: chatId || 'unknown',
       gradeLevel,
       error: "Too many requests",
       retryAfterMs: rate.retryAfterMs,
+      userMessage: "I'm answering a lot right now. Let's pause for a moment.",
     });
   }
 
-  // Track model usage for logging (declared outside try/catch for scope)
   let modelUsed = 'unknown';
   let fallbackUsed = false;
   let wasSuccessful = true;
-  
-  // Extract last user message for logging (declared outside try/catch for scope)
-  const lastUserMessage = messages && messages.length > 0
-    ? messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || ''
-    : '';
+
+  const lastUserMessage =
+    messages && messages.length > 0
+      ? messages.filter((m: any) => m.role === 'user').slice(-1)[0]?.text || ''
+      : '';
 
   try {
-    const previewMsg = messages && messages.length > 0 
-      ? (messages[0].text?.slice(0, 60) + (messages[0].text?.length > 60 ? '…' : '')) 
-      : '';
-    
-    // Build system instructions using existing utility
-    // Use the last 3 messages for context (most recent conversation)
-    const instructionsStart = Date.now();
     const recentContext = messages
       .slice(-3)
-      .map((m: any, idx: number) => `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`)
+      .map(
+        (m: any, idx: number) =>
+          `${idx + 1}. ${m.role === 'user' ? 'User' : 'Owlby'}: "${m.text.slice(0, 100)}${m.text.length > 100 ? '…' : ''}"`
+      )
       .join('\n');
 
     const primaryModel = ROUTE_MODEL_CONFIG.chat?.primary;
-    const systemInstructions = primaryModel === MODELS.FLASH_OLD
-      ? getChatInstructionsForFlash25(gradeLevel, recentContext)
-      : getChatInstructions(gradeLevel, recentContext);
-    mark('instructionsMs', instructionsStart);
-    
-    // Create contents for AI request
+    const systemInstructions =
+      primaryModel === MODELS.FLASH_OLD || primaryModel === MODELS.FLASH
+        ? getChatInstructionsForFlash25(gradeLevel, recentContext)
+        : getChatInstructions(gradeLevel, recentContext);
+
     const contents = [
       {
         role: 'user',
@@ -263,9 +289,13 @@ export default async function handler(req: any, res: any) {
 
     try {
       const aiStart = Date.now();
-      
-      // Process AI request using centralized handler with retry and fallback
-      const { responseText, usageMetadata, modelUsed: usedModel, fallbackUsed: usedFallback } = await processAIRequest(
+
+      const {
+        responseText,
+        usageMetadata,
+        modelUsed: usedModel,
+        fallbackUsed: usedFallback,
+      } = await processAIRequest(
         chatResponseSchema,
         systemInstructions,
         contents,
@@ -273,48 +303,59 @@ export default async function handler(req: any, res: any) {
         lastUserMessage,
         2048
       );
-      
+
       modelUsed = usedModel;
       fallbackUsed = usedFallback;
       aiDurationMs = Date.now() - aiStart;
       timing.aiMs = aiDurationMs;
-      const promptTokens = usageMetadata?.promptTokenCount ?? 0;
-      const outputTokens = usageMetadata?.candidatesTokenCount ?? 0;
-      const thinkingTokens = usageMetadata?.thinkingTokenCount ?? usageMetadata?.thoughtsTokenCount ?? 0;
-      const totalTokens = usageMetadata?.totalTokenCount ?? (promptTokens + outputTokens + thinkingTokens);
-      timing.promptTokens = promptTokens;
-      timing.outputTokens = outputTokens;
-      timing.thinkingTokens = thinkingTokens;
-      timing.totalTokens = totalTokens;
-      
-      // Process complete response
-      const processStart = Date.now();
-      processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
-      mark('processResponseMs', processStart);
-      
-      // Normalize achievement tags
-      const normalizeStart = Date.now();
-      normalizeAchievementTags(processedResponse);
-      mark('normalizeTagsMs', normalizeStart);
-      
-      // Extensive logging for debugging interactive elements
-      console.log('[CHAT API] Full response structure:', JSON.stringify({
-        hasResponseText: !!processedResponse.response_text,
-        hasInteractiveElements: !!processedResponse.interactive_elements,
-        interactiveElements: processedResponse.interactive_elements,
-        learnMore: processedResponse.interactive_elements?.learn_more,
-        storyButton: processedResponse.interactive_elements?.story_button,
-        optionalTags: processedResponse.optionalTags,
-        requiredCategoryTags: processedResponse.requiredCategoryTags,
-      }, null, 2));
 
-      // Always log chat API usage for cost tracking
-      const logStart = Date.now();
+      processedResponse = processResponse(responseText, '[multi-turn]', gradeLevel, chatId);
+      normalizeAchievementTags(processedResponse);
+
+      // For follow-up button presses (e.g. "Tell me more!") the last user message is
+      // not a usable image query. Prefer the conversation's substantive topic: the
+      // learn_more topic, else the longest recent user message, else the last message.
+      const longestUserMessage = (messages as any[])
+        .filter((m) => m?.role === 'user' && typeof m.text === 'string')
+        .map((m) => m.text as string)
+        .sort((a, b) => b.length - a.length)[0];
+      const imageFallbackQuery =
+        processedResponse.interactive_elements?.learn_more?.topic ||
+        longestUserMessage ||
+        lastUserMessage;
+
+      processedResponse.image = await resolveWikimediaImage({
+        wikimediaQuery: processedResponse.wikimediaQuery,
+        optionalTags: processedResponse.optionalTags,
+        topic: processedResponse.interactive_elements?.learn_more?.topic,
+        fallbackQuery: imageFallbackQuery,
+        maxQueries: 3,
+        avoidUrls: Array.isArray(avoidUrls) ? avoidUrls : undefined,
+      });
+
+      console.log(
+        '[CHAT API] Full response structure:',
+        JSON.stringify(
+          {
+            hasResponseText: !!processedResponse.response_text,
+            hasInteractiveElements: !!processedResponse.interactive_elements,
+            interactiveElements: processedResponse.interactive_elements,
+            learnMore: processedResponse.interactive_elements?.learn_more,
+            storyButton: processedResponse.interactive_elements?.story_button,
+            optionalTags: processedResponse.optionalTags,
+            requiredCategoryTags: processedResponse.requiredCategoryTags,
+            hasImage: !!processedResponse.image,
+          },
+          null,
+          2
+        )
+      );
+
       logChatCall({
         userId,
         chatId,
         gradeLevel,
-        message: lastUserMessage, // Use actual user message instead of placeholder
+        message: lastUserMessage,
         responseText,
         responseTimeMs: Date.now() - startTime,
         success: true,
@@ -322,16 +363,15 @@ export default async function handler(req: any, res: any) {
         model: modelUsed,
       });
       void flushApiLogger();
-      mark('logEnqueueMs', logStart);
 
+      await incrementDailyUsage(userId, 'chat');
     } catch (aiError: any) {
       wasSuccessful = false;
-      // Always log chat API usage for cost tracking (even on errors)
       logChatCall({
         userId,
         chatId,
         gradeLevel,
-        message: lastUserMessage, // Use actual user message instead of placeholder
+        message: lastUserMessage,
         responseTimeMs: Date.now() - startTime,
         success: false,
         error: aiError.message || 'UnknownError',
@@ -339,37 +379,36 @@ export default async function handler(req: any, res: any) {
       });
       void flushApiLogger();
 
-      // Handle specific AI errors with fallback responses
       if (aiError.message === 'SERVICE_UNAVAILABLE_REGION') {
         processedResponse = {
           response_text: {
-            main: "I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?"
+            main:
+              "I'm sorry, but I'm not available in your region at the moment. Is there anything else I can help you with?",
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],
             learn_more: { topic: "" },
-            story_button: { prompt: "" }
+            story_button: { prompt: "" },
           },
           requiredCategoryTags: [],
-          optionalTags: []
+          optionalTags: [],
         };
       } else {
         processedResponse = {
           response_text: {
-            main: "I'm having trouble processing your request right now. Can you try asking something else?"
+            main: "I'm having trouble processing your request right now. Can you try asking something else?",
           },
           interactive_elements: {
             followup_buttons: ["Try again", "Ask something else"],
             learn_more: { topic: "" },
-            story_button: { prompt: "" }
+            story_button: { prompt: "" },
           },
           requiredCategoryTags: [],
-          optionalTags: []
+          optionalTags: [],
         };
       }
     }
 
-    // Final flush before returning (logging already done above)
     void flushApiLogger();
 
     logTimingSummary({
@@ -392,17 +431,15 @@ export default async function handler(req: any, res: any) {
         success: wasSuccessful,
       });
     }
-    
-    return res.status(200).json(processedResponse);
 
+    return res.status(200).json(processedResponse);
   } catch (error: any) {
     wasSuccessful = false;
-    // Always log chat API usage for cost tracking (even on errors)
     logChatCall({
       userId,
       chatId,
       gradeLevel,
-      message: lastUserMessage || '[unknown]', // Use actual user message if available
+      message: lastUserMessage || '[unknown]',
       responseTimeMs: Date.now() - startTime,
       success: false,
       error: error.message || 'UnknownApiError',
@@ -432,29 +469,26 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Return graceful error response matching ChatResponse structure
     const errorMessage = error.message || 'Unknown error';
-    const userFriendlyMessage = errorMessage.includes('region') 
+    const userFriendlyMessage = errorMessage.includes('region')
       ? "I'm not available in your region right now. Please try again later."
       : "I'm having trouble processing that right now. Can you try asking something else?";
-    
+
     return res.status(500).json({
       success: false,
       response_text: {
         main: userFriendlyMessage,
-        follow_up: "What would you like to try next?"
+        follow_up: "What would you like to try next?",
       },
       interactive_elements: {
         followup_buttons: ["Try again", "Ask something else"],
         learn_more: { topic: "" },
-        story_button: { prompt: "" }
+        story_button: { prompt: "" },
       },
-      content_blocks: {
-        safety_filter: false
-      },
+      content_blocks: { safety_filter: false },
       chatId: req.body?.chatId || 'unknown',
-      gradeLevel: req.body?.gradeLevel || 3,
-      error: errorMessage
+      gradeLevel: req.body?.gradeLevel ?? 3,
+      error: errorMessage,
     });
   }
 }

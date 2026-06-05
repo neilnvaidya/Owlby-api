@@ -3,8 +3,17 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: ['**/test/**/*.test.ts'],
   moduleFileExtensions: ['ts', 'js'],
+  extensionsToTreatAsEsm: ['.ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        useESM: true,
+      },
+    ],
+  },
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   collectCoverageFrom: [
     'api/**/*.ts',
@@ -12,4 +21,4 @@ module.exports = {
     '!**/*.test.ts',
     '!**/*.d.ts',
   ],
-}; 
+};

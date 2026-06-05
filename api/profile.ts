@@ -1,9 +1,108 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { UserProfile, ProfileUpdateRequest, createMockUserProfile } from '../lib/profile-types';
-import { supabase } from '../lib/supabase';
-import { verifySupabaseToken } from '../lib/auth-supabase';
+import { UserProfile, ProfileUpdateRequest } from '../lib/profile-types.js';
+import { supabase } from '../lib/supabase.js';
+import { verifySupabaseToken } from '../lib/auth-supabase.js';
+import { canGenerate } from '../lib/subscription-gate.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    return res.status(204).end();
+  }
+
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const scope = typeof req.query.scope === 'string' ? req.query.scope : undefined;
+
+  // RevenueCat webhook (no Supabase auth; verifies REVENUECAT_WEBHOOK_SECRET).
+  // Folded into this handler to stay within the Vercel Hobby 12-function limit.
+  if (scope === 'revenuecat-webhook') {
+    return await handleRevenueCatWebhook(req, res);
+  }
+
+  // Health check (no auth) - was api/status.ts?scope=health
+  if (scope === 'health') {
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    const timestamp = new Date().toISOString();
+    const method = req.method || 'GET';
+    const url = req.url || '/health';
+    const userAgent = req.headers?.['user-agent'] || 'unknown';
+    const ip =
+      (req.headers?.['x-forwarded-for'] as string | undefined) ||
+      (req.headers?.['x-real-ip'] as string | undefined) ||
+      (req.socket as any)?.remoteAddress ||
+      'unknown';
+    console.log(`[HEALTH CHECK] ${timestamp} - ${method} ${url}`);
+    console.log(`[HEALTH] IP: ${ip} | User-Agent: ${userAgent}`);
+    return res.status(200).json({
+      status: 'ok',
+      timestamp,
+      service: 'owlby-api',
+      version: '1.0.0',
+    });
+  }
+
+  // Subscription status (auth required) - was api/status.ts?scope=subscription
+  if (scope === 'subscription') {
+    if (req.method !== 'GET') {
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        error: 'Missing authorization token',
+        userMessage: 'Please sign in again.',
+      });
+    }
+    let decoded: any;
+    try {
+      decoded = await verifySupabaseToken(token);
+    } catch {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token',
+        userMessage: 'Session expired. Please sign in again.',
+      });
+    }
+    const userId = decoded?.id || 'unknown';
+    try {
+      const gate = await canGenerate(userId, 'chat');
+      let subscriptionStatus: 'active' | 'expired' | 'none' | 'free_tier';
+      if (gate.tier === 'premium') {
+        subscriptionStatus = 'active';
+      } else if (gate.tier === 'early_adopter') {
+        subscriptionStatus = 'active';
+      } else if (gate.allowed) {
+        subscriptionStatus = 'free_tier';
+      } else {
+        subscriptionStatus = 'none';
+      }
+      return res.status(200).json({
+        success: true,
+        canGenerate: gate.allowed,
+        subscriptionStatus,
+        tier: gate.tier,
+        dailyUsage: gate.dailyUsage || null,
+        dailyLimit: gate.dailyLimit,
+        limitReached: !gate.allowed && gate.reason === 'daily_limit_reached',
+      });
+    } catch (err: any) {
+      console.error('[PROFILE] Subscription scope error:', err.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to check subscription status',
+        userMessage: 'Something went wrong. Please try again.',
+      });
+    }
+  }
+
+  // Profile: GET / POST / DELETE (auth required)
   try {
     const authHeader = req.headers.authorization || '';
     const token = authHeader.replace('Bearer ', '');
@@ -14,18 +113,117 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const user = await verifySupabaseToken(token);
     const authUid = user.id;
 
-    // Handle different HTTP methods
+    // Allow onboarding-specific updates to be routed via a context flag
+    const context =
+      (typeof req.query.context === 'string' ? req.query.context : undefined) ||
+      (typeof (req.body as any)?.context === 'string' ? (req.body as any).context : undefined);
+
     switch (req.method) {
       case 'GET':
         return await getProfile(authUid, user, res);
       case 'POST':
+        if (context === 'onboarding') {
+          return await updateOnboardingProfile(authUid, user, req.body, res);
+        }
         return await updateProfile(authUid, user, req.body, res);
+      case 'DELETE':
+        return await deleteAccount(authUid, res);
       default:
         return res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (error) {
     console.error('Profile API error:', error);
     return res.status(401).json({ error: 'Authentication failed' });
+  }
+}
+
+// --- RevenueCat webhook (folded in to avoid a 13th Vercel function) ---
+
+const RC_WEBHOOK_SECRET = process.env.REVENUECAT_WEBHOOK_SECRET || '';
+
+const RC_ACTIVATE_EVENTS = new Set([
+  'INITIAL_PURCHASE',
+  'RENEWAL',
+  'UNCANCELLATION',
+  'PRODUCT_CHANGE',
+]);
+
+const RC_DEACTIVATE_EVENTS = new Set(['CANCELLATION', 'EXPIRATION']);
+
+function rcPlatformFromStore(store: string | undefined): 'ios' | 'android' | null {
+  if (store === 'APP_STORE' || store === 'MAC_APP_STORE') return 'ios';
+  if (store === 'PLAY_STORE') return 'android';
+  return null;
+}
+
+async function handleRevenueCatWebhook(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const authHeader = req.headers.authorization || '';
+  if (!RC_WEBHOOK_SECRET || authHeader !== RC_WEBHOOK_SECRET) {
+    console.warn('[RC WEBHOOK] Unauthorized request');
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  // Respond immediately so RevenueCat doesn't retry; process asynchronously.
+  res.status(200).json({ ok: true });
+
+  try {
+    const { event } = req.body || {};
+    if (!event) {
+      console.warn('[RC WEBHOOK] No event in payload');
+      return;
+    }
+
+    const eventType: string = event.type;
+    const appUserId: string = event.app_user_id;
+    const originalAppUserId: string = event.original_app_user_id || appUserId;
+    const productId: string = event.product_id || '';
+    const entitlementIds: string[] = event.entitlement_ids || [];
+    const expiresAtMs: number | null = event.expiration_at_ms;
+    const store: string | undefined = event.store;
+    const environment: string = event.environment || 'PRODUCTION';
+
+    console.info(
+      `[RC WEBHOOK] ${eventType} | user=${appUserId} | product=${productId} | env=${environment}`
+    );
+
+    const userId = appUserId;
+    const platform = rcPlatformFromStore(store);
+    const expiresAt = expiresAtMs ? new Date(expiresAtMs).toISOString() : null;
+    const entitlementId = entitlementIds[0] || 'premium';
+
+    if (RC_ACTIVATE_EVENTS.has(eventType) || RC_DEACTIVATE_EVENTS.has(eventType)) {
+      const isActive = RC_ACTIVATE_EVENTS.has(eventType);
+      const { error } = await supabase.from('user_subscription').upsert(
+        {
+          user_id: userId,
+          product_id: productId,
+          entitlement_id: entitlementId,
+          platform,
+          revenuecat_original_app_user_id: originalAppUserId,
+          is_active: isActive,
+          expires_at: expiresAt,
+          store: store || null,
+          event_type: eventType,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id' }
+      );
+      if (error) {
+        console.error(`[RC WEBHOOK] Upsert ${isActive ? 'activate' : 'deactivate'} error:`, error.message);
+      }
+    } else if (eventType === 'BILLING_ISSUE') {
+      console.warn(`[RC WEBHOOK] BILLING_ISSUE for user=${userId}, product=${productId}`);
+      // Keep subscription active for now; RevenueCat retries billing.
+      // If it eventually fails, an EXPIRATION event will follow.
+    } else {
+      console.info(`[RC WEBHOOK] Unhandled event type: ${eventType}`);
+    }
+  } catch (err: any) {
+    console.error('[RC WEBHOOK] Processing error:', err.message);
   }
 }
 
@@ -201,6 +399,160 @@ async function updateProfile(authUid: string, decoded: any, updateData: ProfileU
   }
 }
 
+/**
+ * Onboarding-specific profile update handler
+ * Mirrors the previous /api/update-profile endpoint but is now routed via /api/profile?context=onboarding
+ */
+async function updateOnboardingProfile(
+  authUid: string,
+  decoded: any,
+  body: any,
+  res: VercelResponse
+) {
+  try {
+    const { name, age, userId } = body || {};
+
+    // Validate required fields
+    if (!name || !age || !userId) {
+      return res.status(400).json({
+        error: 'validation_error',
+        message: 'Name, age, and userId are required',
+      });
+    }
+
+    // Ensure the userId matches the token (security check)
+    if (authUid !== userId) {
+      console.warn('⚠️ Security: User ID mismatch in onboarding request');
+      return res.status(403).json({
+        error: 'forbidden',
+        message: 'User ID mismatch',
+      });
+    }
+
+    // Convert age to grade level estimation
+    // This is an approximation: age 5-6 = K, 6-7 = 1st, etc.
+    const ageNum = parseInt(String(age), 10);
+    const estimatedGradeLevel = Math.max(0, Math.min(12, ageNum - 5));
+
+    // Validate and prepare onboarding data for Supabase
+    const onboardingData = {
+      name: String(name).trim().slice(0, 100),
+      grade_level: estimatedGradeLevel,
+      // Initialize empty arrays for future expansion
+      interests: [] as string[],
+      achievements: [] as any[],
+    };
+
+    // Check if user exists in Supabase
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_uid', authUid)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    const userData = {
+      name: onboardingData.name,
+      grade_level: onboardingData.grade_level,
+      interests: onboardingData.interests,
+      achievements: onboardingData.achievements,
+      last_login_at: new Date().toISOString(),
+    };
+
+    if (existingUser) {
+      // Update existing user with onboarding data
+      console.info('📝 Updating existing user with onboarding data:', authUid);
+
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update(userData)
+        .eq('auth_uid', authUid)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      console.info('✅ User profile updated successfully with onboarding data');
+
+      const profile = {
+        user_id: authUid,
+        name: updatedUser.name || '',
+        email: decoded.email || '',
+        picture: updatedUser.avatar_url || decoded.picture || undefined,
+        grade_level: updatedUser.grade_level || undefined,
+        interests: updatedUser.interests || undefined,
+        achievements: updatedUser.achievements || undefined,
+        parent_email: updatedUser.parent_email || undefined,
+      };
+
+      return res.status(200).json({
+        success: true,
+        message: 'Onboarding profile updated successfully',
+        profile,
+        data: {
+          userId: authUid,
+          name: userData.name,
+          grade_level: userData.grade_level,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    } else {
+      // Create new user with onboarding data
+      console.info('👤 Creating new user with onboarding data:', authUid);
+
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert([
+          {
+            auth_uid: authUid,
+            email: decoded.email || '',
+            avatar_url: decoded.picture || null,
+            ...userData,
+            created_at: new Date().toISOString(),
+          },
+        ])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      console.info('✅ New user created successfully with onboarding data');
+
+      const profile = {
+        user_id: authUid,
+        name: newUser.name || '',
+        email: decoded.email || '',
+        picture: newUser.avatar_url || undefined,
+        grade_level: newUser.grade_level || undefined,
+        interests: newUser.interests || undefined,
+        achievements: newUser.achievements || undefined,
+        parent_email: newUser.parent_email || undefined,
+      };
+
+      return res.status(201).json({
+        success: true,
+        message: 'Onboarding profile created successfully',
+        profile,
+        data: {
+          userId: authUid,
+          name: userData.name,
+          grade_level: userData.grade_level,
+          createdAt: new Date().toISOString(),
+        },
+      });
+    }
+  } catch (error) {
+    console.error('❌ Onboarding profile update error:', error);
+    return res.status(500).json({
+      error: 'Failed to update onboarding profile',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}
+
 // Helper function to build comprehensive profile from database data
 function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
   const achievements = Array.isArray(userData.achievements) ? userData.achievements : [];
@@ -272,3 +624,36 @@ function buildProfileFromDbData(userData: any, decoded: any): UserProfile {
     total_stories_generated: userData.total_stories_generated ?? 0,
   };
 } 
+
+async function deleteAccount(authUid: string, res: VercelResponse) {
+  try {
+    console.info('Starting account deletion');
+
+    try {
+      const { error: supabaseError } = await supabase
+        .from('users')
+        .delete()
+        .eq('auth_uid', authUid);
+
+      if (supabaseError) {
+        console.error('Supabase deletion error:', supabaseError);
+      } else {
+        console.info('Deleted user from Supabase');
+      }
+    } catch (supabaseError) {
+      console.error('Supabase deletion failed:', supabaseError);
+    }
+
+    console.info('Account deletion completed successfully');
+    return res.status(200).json({
+      success: true,
+      message: 'Account successfully deleted',
+    });
+  } catch (error) {
+    console.error('Account deletion error:', error);
+    return res.status(500).json({
+      error: 'Failed to delete account',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
+}

@@ -1,1 +1,104 @@
-{"rewrites":[{"source":"/health","destination":"/api/health"},{"source":"/achievements/sync","destination":"/api/achievements/sync"},{"source":"/verify-email","destination":"/api/verify-email"},{"source":"/profile","destination":"/api/profile"},{"source":"/learn/lesson","destination":"/api/learn/generate-lesson"},{"source":"/learn/generate-lesson","destination":"/api/learn/generate-lesson"},{"source":"/chat/response","destination":"/api/chat/generate-response"},{"source":"/chat/generate-response","destination":"/api/chat/generate-response"},{"source":"/feedback/submit","destination":"/api/feedback/submit"}]}
+{
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/profile?scope=health"
+    },
+    {
+      "source": "/api/health",
+      "destination": "/api/profile?scope=health"
+    },
+    {
+      "source": "/subscription-status",
+      "destination": "/api/profile?scope=subscription"
+    },
+    {
+      "source": "/api/subscription-status",
+      "destination": "/api/profile?scope=subscription"
+    },
+    {
+      "source": "/achievements/sync",
+      "destination": "/api/achievements/sync"
+    },
+    {
+      "source": "/verify-email",
+      "destination": "/api/email"
+    },
+    {
+      "source": "/api/verify-email",
+      "destination": "/api/email"
+    },
+    {
+      "source": "/profile",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/update-profile",
+      "destination": "/api/profile?context=onboarding"
+    },
+    {
+      "source": "/lesson/start",
+      "destination": "/api/lesson/start"
+    },
+    {
+      "source": "/lesson/objectives",
+      "destination": "/api/lesson/objectives"
+    },
+    {
+      "source": "/lesson/chunk",
+      "destination": "/api/lesson/chunk"
+    },
+    {
+      "source": "/lesson/evaluate",
+      "destination": "/api/lesson/evaluate"
+    },
+    {
+      "source": "/lesson/consolidation",
+      "destination": "/api/lesson/consolidation"
+    },
+    {
+      "source": "/chat/response",
+      "destination": "/api/chat/generate-response"
+    },
+    {
+      "source": "/chat/generate-response",
+      "destination": "/api/chat/generate-response"
+    },
+    {
+      "source": "/feedback/submit",
+      "destination": "/api/feedback/submit"
+    },
+    {
+      "source": "/webhooks/revenuecat",
+      "destination": "/api/profile?scope=revenuecat-webhook"
+    },
+    {
+      "source": "/api/webhooks/revenuecat",
+      "destination": "/api/profile?scope=revenuecat-webhook"
+    },
+    {
+      "source": "/api/update-profile",
+      "destination": "/api/profile?context=onboarding"
+    },
+    {
+      "source": "/delete-account",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/api/delete-account",
+      "destination": "/api/profile"
+    },
+    {
+      "source": "/api/send-verification",
+      "destination": "/api/email?action=send"
+    },
+    {
+      "source": "/api/resend-verification",
+      "destination": "/api/email?action=resend"
+    },
+    {
+      "source": "/media/image",
+      "destination": "/api/media/image"
+    }
+  ]
+}

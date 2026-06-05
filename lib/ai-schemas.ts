@@ -1,58 +1,41 @@
 import { Type } from '@google/genai';
-import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories';
+import { ACHIEVEMENT_TAG_ENUM } from './badgeCategories.js';
+import { TAGS_SCHEMA_FRAGMENT } from './ai-tags.js';
 
 /**
  * Centralized AI Response Schemas for Owlby
- * All schemas include standardized achievement tag fields for consistency
+ * Tag fields (requiredCategoryTags, optionalTags) come from lib/ai-tags.ts for all routes.
  */
 
 /**
- * Base achievement tags schema used across all endpoints
- */
-const ACHIEVEMENT_TAGS_SCHEMA = {
-  // Deprecated: kept for backward compatibility
-  tags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } 
-  },
-  // Current: required category tags for achievement system
-  requiredCategoryTags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING, enum: ACHIEVEMENT_TAG_ENUM as any } 
-  },
-  // Current: required detailed context tags (passed to lesson/story routes)
-  optionalTags: { 
-    type: Type.ARRAY, 
-    items: { type: Type.STRING },
-    description: "Required detailed context tags that carry specific information (people, places, concepts) to lesson/story routes"
-  }
-};
-
-/**
- * Chat response schema for conversational AI interactions
+ * Chat response schema (includes tags; see lib/ai-tags.ts for tag definitions).
  */
 export const chatResponseSchema = {
   type: Type.OBJECT,
-  required: ["response_text", "interactive_elements", "optionalTags"],
+  required: ['response_text', 'interactive_elements', 'requiredCategoryTags', 'optionalTags'],
   properties: {
-    ...ACHIEVEMENT_TAGS_SCHEMA,
+    wikimediaQuery: {
+      type: Type.STRING,
+      description:
+        'A short 2–5 word phrase for Wikimedia Commons image search. Must be a concrete, specific subject (e.g. "puffin bird", "coral reef fish", "Saturn rings"). NOT a category code. Use empty string if no good visual subject exists.',
+    },
     response_text: {
       type: Type.OBJECT,
-      required: ["main"],
+      required: ['main'],
       properties: {
-        main: { 
+        main: {
           type: Type.STRING,
-          description: "Complete response text, 300-1000 characters. Must be complete sentences, never truncated."
+          description: 'Complete response text. Length and vocabulary must match the student age specified in the system instruction. Must be complete sentences, never truncated.',
         },
-        follow_up: { 
+        follow_up: {
           type: Type.STRING,
-          description: "Complete follow-up question, 50-200 characters. Must end with a question mark."
+          description: 'Complete follow-up question, 50-200 characters. Must end with a question mark.',
         },
       },
     },
     interactive_elements: {
       type: Type.OBJECT,
-      required: ["followup_buttons", "story_button", "learn_more"],
+      required: ['followup_buttons', 'story_button', 'learn_more'],
       properties: {
         followup_buttons: {
           type: Type.ARRAY,
@@ -72,6 +55,7 @@ export const chatResponseSchema = {
         },
       },
     },
+    ...TAGS_SCHEMA_FRAGMENT,
   },
 } as const;
 
@@ -122,9 +106,142 @@ export const lessonResponseSchema = {
             }
           }
         },
-        ...ACHIEVEMENT_TAGS_SCHEMA,
+        ...TAGS_SCHEMA_FRAGMENT,
       }
     }
+  },
+} as const;
+
+// =============================================================================
+// Lesson System v3 — five-route schemas (Part 8)
+// =============================================================================
+
+export const lessonV3StartResponseSchema = {
+  type: Type.OBJECT,
+  required: ['hook', 'question'],
+  properties: {
+    hook: { type: Type.STRING, description: 'One vivid hook sentence, not a question' },
+    question: { type: Type.STRING, description: 'Open-ended prior knowledge question' },
+  },
+} as const;
+
+const lessonV3ObjectiveEntrySchema = {
+  type: Type.OBJECT,
+  required: ['title', 'key_facts', 'status', 'note', 'image_query'],
+  properties: {
+    title: { type: Type.STRING },
+    key_facts: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      minItems: 2,
+      maxItems: 6,
+    },
+    status: { type: Type.STRING, enum: ['pending', 'current', 'complete'] },
+    note: { type: Type.STRING, nullable: true },
+    image_query: {
+      type: Type.STRING,
+      description:
+        'A 2–4 word concrete visual noun phrase for a Wikimedia Commons image that illustrates this objective (e.g. "honey bee", "Roman aqueduct", "solar eclipse"). Name the specific thing pictured — NOT an abstract category. Empty string only if truly no visual subject fits.',
+    },
+  },
+};
+
+const lessonV3ObjectivesStateSchema = {
+  type: Type.OBJECT,
+  required: ['student_age', 'topic', 'objectives', 'current_index'],
+  properties: {
+    student_age: { type: Type.INTEGER },
+    topic: { type: Type.STRING },
+    current_index: { type: Type.INTEGER },
+    objectives: {
+      type: Type.ARRAY,
+      items: lessonV3ObjectiveEntrySchema,
+      minItems: 1,
+      maxItems: 4,
+    },
+  },
+};
+
+export const lessonV3ObjectivesResponseSchema = {
+  type: Type.OBJECT,
+  required: ['bridge_message', 'lesson_objectives'],
+  properties: {
+    bridge_message: { type: Type.STRING },
+    lesson_objectives: lessonV3ObjectivesStateSchema,
+  },
+} as const;
+
+export const lessonV3ChunkResponseSchema = {
+  type: Type.OBJECT,
+  required: [
+    'content',
+    'learning_points',
+    'questions',
+    'question',
+    'question_type',
+    'mcq_options',
+    'correct_answer',
+  ],
+  properties: {
+    content: { type: Type.STRING },
+    learning_points: { type: Type.ARRAY, items: { type: Type.STRING }, minItems: 2, maxItems: 6 },
+    questions: {
+      type: Type.ARRAY,
+      minItems: 2,
+      maxItems: 6,
+      items: {
+        type: Type.OBJECT,
+        required: ['question', 'question_type', 'mcq_options', 'correct_answer'],
+        properties: {
+          question: { type: Type.STRING },
+          question_type: {
+            type: Type.STRING,
+            enum: ['mcq', 'short_answer', 'higher_order'],
+          },
+          mcq_options: { type: Type.ARRAY, items: { type: Type.STRING } },
+          correct_answer: { type: Type.STRING, nullable: true },
+        },
+      },
+    },
+    question: { type: Type.STRING },
+    question_type: {
+      type: Type.STRING,
+      enum: ['mcq', 'short_answer', 'higher_order'],
+    },
+    mcq_options: { type: Type.ARRAY, items: { type: Type.STRING } },
+    correct_answer: { type: Type.STRING, nullable: true },
+  },
+} as const;
+
+export const lessonV3EvaluateResponseSchema = {
+  type: Type.OBJECT,
+  required: ['result', 'feedback', 'note'],
+  properties: {
+    result: { type: Type.STRING, enum: ['correct', 'partial', 'incorrect'] },
+    feedback: { type: Type.STRING },
+    note: { type: Type.STRING },
+  },
+} as const;
+
+const lessonV3ConsolidationMcqItemSchema = {
+  type: Type.OBJECT,
+  required: ['question', 'options', 'correct_answer', 'explanation'],
+  properties: {
+    question: { type: Type.STRING },
+    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+    correct_answer: { type: Type.STRING },
+    explanation: { type: Type.STRING },
+  },
+};
+
+export const lessonV3ConsolidationResponseSchema = {
+  type: Type.OBJECT,
+  required: ['mcq_sweep', 'explain_back_prompt', 'closing_message', 'lesson_complete'],
+  properties: {
+    mcq_sweep: { type: Type.ARRAY, items: lessonV3ConsolidationMcqItemSchema },
+    explain_back_prompt: { type: Type.STRING },
+    closing_message: { type: Type.STRING },
+    lesson_complete: { type: Type.BOOLEAN },
   },
 } as const;
 
@@ -166,7 +283,7 @@ export const storyResponseSchema = {
           type: Type.STRING,
           description: "Optional lesson or moral from the story"
         },
-        ...ACHIEVEMENT_TAGS_SCHEMA,
+        ...TAGS_SCHEMA_FRAGMENT,
       }
     }
   }

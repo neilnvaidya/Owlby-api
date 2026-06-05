@@ -1,5 +1,6 @@
 // Owlby-api/lib/api-logger.ts
 import { createClient } from '@supabase/supabase-js';
+import { withTimeout } from './async-utils.js';
 
 // Re-using the Supabase client from the web project for consistency
 // This assumes that environment variables SUPABASE_URL and SUPABASE_ANON_KEY are available
@@ -8,15 +9,7 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY!
 );
 
-const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 8000);
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
-  let timeoutId: NodeJS.Timeout;
-  return new Promise<T>((resolve, reject) => {
-    timeoutId = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-    promise.then(resolve).catch(reject);
-  }).finally(() => clearTimeout(timeoutId));
-}
+const LOG_FLUSH_TIMEOUT_MS = Number(process.env.API_LOGGER_FLUSH_TIMEOUT_MS ?? 15000);
 
 interface APILogData {
   route: 'chat' | 'lesson' | 'story';
@@ -77,13 +70,12 @@ class APILoggingService {
     startTime: new Date()
   };
 
-  // Gemini pricing per 1M tokens (update as needed)
-  // Note: Thinking tokens are charged at the same rate as input tokens
-  private readonly PRICING = {
-    'gemini-3-flash-preview': { input: 0.50, output: 3.00, thinking: 3.00}, // Preview model, similar to Flash pricing
-    'gemini-3-flash': { input: 0.5, output: 3.00, thinking: 3.00 }, // Flash has no thinking, but set for consistency
-    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 2.50}, // Flash has no thinking, but set for consistency
-    'gemini-2.5-pro': { input: 1.25, output: 10.00, thinking: 10.0 }, // Thinking charged at input rate
+  // Pricing per 1M tokens (Gemini only). Thinking tokens charged at same rate as input.
+  private readonly PRICING: Record<string, { input: number; output: number; thinking: number }> = {
+    'gemini-3-flash-preview': { input: 0.50, output: 3.00, thinking: 3.00 },
+    'gemini-3-flash': { input: 0.5, output: 3.00, thinking: 3.00 },
+    'gemini-2.5-flash': { input: 0.30, output: 2.50, thinking: 2.50 },
+    'gemini-2.5-pro': { input: 1.25, output: 10.00, thinking: 10.0 },
   };
   
   constructor() {
@@ -252,17 +244,32 @@ class APILoggingService {
     const batch = [...this.buffer];
     this.buffer = [];
 
-    try {
-      const insertPromise = supabase.from('api_usage_logs').insert(batch);
-      const { error, data } = await withTimeout(
-        insertPromise as unknown as Promise<any>,
+    const doInsert = () =>
+      withTimeout(
+        Promise.resolve(supabase.from('api_usage_logs').insert(batch)),
         LOG_FLUSH_TIMEOUT_MS,
         'API_LOGGER_FLUSH_TIMEOUT'
       );
 
-      if (error) {
-        console.error('[API LOGGER] Supabase insert error:', error, { batch });
-        // Re-add to buffer for retry on next flush
+    const attemptFlush = async (): Promise<{ ok: boolean; error?: any }> => {
+      try {
+        const { error } = await doInsert();
+        if (error) return { ok: false, error };
+        return { ok: true };
+      } catch (err: any) {
+        if (err?.message === 'API_LOGGER_FLUSH_TIMEOUT') return { ok: false, error: err };
+        throw err;
+      }
+    };
+
+    try {
+      let result = await attemptFlush();
+      if (!result.ok && result.error?.message === 'API_LOGGER_FLUSH_TIMEOUT') {
+        // Retry once on timeout (Supabase may be slow)
+        result = await attemptFlush();
+      }
+      if (!result.ok) {
+        console.error('[API LOGGER] Supabase insert error:', result.error, { batch });
         this.buffer.unshift(...batch);
       } else {
         console.info(`📊 Logged ${batch.length} API calls to database`);
@@ -325,6 +332,32 @@ export const logChatCall = (data: {
       outputText: data.responseText,
       geminiUsageMetadata: data.usageMetadata,
       ...data
+    });
+  };
+
+  /** Lesson v3 — logs under route `lesson` with step prefix for filtering */
+  export const logLessonV3Call = (data: {
+    userId?: string;
+    step: 'start' | 'objectives' | 'chunk' | 'evaluate' | 'consolidation';
+    studentAge: number;
+    inputSummary: string;
+    responseText?: string;
+    responseTimeMs: number;
+    success: boolean;
+    error?: string;
+    usageMetadata?: any;
+    model: string;
+  }) => {
+    return logLessonCall({
+      userId: data.userId,
+      gradeLevel: data.studentAge,
+      topic: `[v3/${data.step}] ${data.inputSummary}`,
+      responseText: data.responseText,
+      responseTimeMs: data.responseTimeMs,
+      success: data.success,
+      error: data.error,
+      usageMetadata: data.usageMetadata,
+      model: data.model,
     });
   };
   

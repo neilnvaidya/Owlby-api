@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { supabase } from './supabase';
+import { supabase } from './supabase.js';
 
 const EMAIL_VERIFICATION_SECRET =
   process.env.EMAIL_VERIFICATION_SECRET ||
@@ -62,7 +62,7 @@ export async function verifyAndConsumeToken(token: string): Promise<Verification
   try {
     decoded = jwt.verify(token, EMAIL_VERIFICATION_SECRET, {
       algorithms: ['HS256'],
-    }) as VerificationPayload;
+    }) as unknown as VerificationPayload;
   } catch (err) {
     throw new Error('Invalid or expired verification token');
   }
